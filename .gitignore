@@ -1,0 +1,27 @@
+# Environment
+.env
+
+# Node / API
+server/node_modules/
+server/dist/
+server/uploads/
+
+# Flutter
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/.packages
+app/pubspec.lock
+app/android/
+app/ios/
+app/linux/
+app/macos/
+app/windows/
+app/web/
+app/test/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
