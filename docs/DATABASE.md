@@ -71,9 +71,15 @@ deleted. Powers the per-ticket timeline (“Received 8:45 AM → Vendor Contacte
 - `vendors` — unique index on `lower(company_name)` prevents duplicates;
   `vendor_types text[]` (printer/consumables/maintenance/other); deactivated,
   never deleted.
-- `printers` — asset number, model, serial, owned/leased, department,
-  location/building/floor, vendor, warranty expiry, status
-  (active/repair/disposed).
+- `printers` — asset number, friendly name, model, serial, owned/leased,
+  department, location/building/floor, vendor, warranty expiry, status
+  (active/repair/disposed). Network identity: unique IP address, MAC
+  address, connection type (network/wifi/usb/other), colour/mono flag and
+  consumables (toner) model. Lease terms for leased units: start/end dates
+  (CHECK `lease_end >= lease_start`) and monthly cost; purchase date/cost
+  for owned units. Servicing: last service date and next service due — both
+  feed the automatic notification scan (`lease_expiry_warn_days`,
+  `service_due_warn_days` settings).
 - `users` + `roles` — bcrypt password hashes; roles: admin, ict_officer,
   viewer.
 - `ticket_files` — metadata + disk path under `UPLOAD_DIR` (Docker volume);

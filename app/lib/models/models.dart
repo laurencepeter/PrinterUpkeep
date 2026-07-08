@@ -224,7 +224,20 @@ class Printer {
         vendorName = _s(json['vendor_name']),
         warrantyExpiry = _s(json['warranty_expiry']),
         status = json['status'] ?? 'active',
-        notes = _s(json['notes']);
+        notes = _s(json['notes']),
+        name = _s(json['name']),
+        ipAddress = _s(json['ip_address']),
+        macAddress = _s(json['mac_address']),
+        connectionType = json['connection_type'] ?? 'network',
+        isColor = _b(json['is_color']),
+        consumablesModel = _s(json['consumables_model']),
+        leaseStart = _s(json['lease_start']),
+        leaseEnd = _s(json['lease_end']),
+        leaseMonthlyCost = _d(json['lease_monthly_cost']),
+        purchaseDate = _s(json['purchase_date']),
+        purchaseCost = _d(json['purchase_cost']),
+        lastServiceDate = _s(json['last_service_date']),
+        nextServiceDue = _s(json['next_service_due']);
 
   final String id;
   final String assetNumber;
@@ -241,8 +254,31 @@ class Printer {
   final String? warrantyExpiry;
   final String status;
   final String? notes;
+  final String? name;
+  final String? ipAddress;
+  final String? macAddress;
+  final String connectionType;
+  final bool isColor;
+  final String? consumablesModel;
+  final String? leaseStart;
+  final String? leaseEnd;
+  final double? leaseMonthlyCost;
+  final String? purchaseDate;
+  final double? purchaseCost;
+  final String? lastServiceDate;
+  final String? nextServiceDue;
 
-  String get label => '$assetNumber — $model';
+  bool get isLeased => printerType == 'leased';
+
+  String get label =>
+      name?.isNotEmpty == true ? '$assetNumber — $name ($model)' : '$assetNumber — $model';
+
+  /// "2026-01-01 → 2027-12-31" or null when not leased / no dates set.
+  String? get leasePeriod {
+    if (!isLeased || (leaseStart == null && leaseEnd == null)) return null;
+    String d(String? v) => v == null ? '?' : v.substring(0, v.length >= 10 ? 10 : v.length);
+    return '${d(leaseStart)} → ${d(leaseEnd)}';
+  }
 }
 
 class Department {

@@ -13,7 +13,9 @@ export const printerRepo = {
     if (opts.search) {
       params.push(`%${opts.search}%`);
       where.push(
-        `(p.asset_number ILIKE $${params.length} OR p.model ILIKE $${params.length} OR p.serial_number ILIKE $${params.length})`,
+        `(p.asset_number ILIKE $${params.length} OR p.model ILIKE $${params.length}
+          OR p.serial_number ILIKE $${params.length} OR p.name ILIKE $${params.length}
+          OR p.ip_address ILIKE $${params.length})`,
       );
     }
     if (opts.departmentId) {
@@ -38,24 +40,16 @@ export const printerRepo = {
     return queryOne(`${SELECT} WHERE p.id = $1`, [id]);
   },
 
-  async create(data: {
-    assetNumber: string;
-    model: string;
-    serialNumber?: string | null;
-    printerType: string;
-    departmentId?: string | null;
-    location?: string | null;
-    building?: string | null;
-    floor?: string | null;
-    vendorId?: string | null;
-    warrantyExpiry?: string | null;
-    status?: string;
-    notes?: string | null;
-  }) {
+  async create(data: Record<string, unknown>) {
     return queryOne(
       `INSERT INTO printers (asset_number, model, serial_number, printer_type, department_id,
-                             location, building, floor, vendor_id, warranty_expiry, status, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, 'active'), $12)
+                             location, building, floor, vendor_id, warranty_expiry, status, notes,
+                             name, ip_address, mac_address, connection_type, is_color,
+                             consumables_model, lease_start, lease_end, lease_monthly_cost,
+                             purchase_date, purchase_cost, last_service_date, next_service_due)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, 'active'), $12,
+               $13, $14, $15, COALESCE($16, 'network'), COALESCE($17, FALSE),
+               $18, $19, $20, $21, $22, $23, $24, $25)
        RETURNING *`,
       [
         data.assetNumber,
@@ -70,26 +64,56 @@ export const printerRepo = {
         data.warrantyExpiry ?? null,
         data.status ?? null,
         data.notes ?? null,
+        data.name ?? null,
+        data.ipAddress ?? null,
+        data.macAddress ?? null,
+        data.connectionType ?? null,
+        data.isColor ?? null,
+        data.consumablesModel ?? null,
+        data.leaseStart ?? null,
+        data.leaseEnd ?? null,
+        data.leaseMonthlyCost ?? null,
+        data.purchaseDate ?? null,
+        data.purchaseCost ?? null,
+        data.lastServiceDate ?? null,
+        data.nextServiceDue ?? null,
       ],
     );
   },
 
   async update(id: string, data: Record<string, unknown>) {
+    // Lease/purchase/service fields use explicit-null semantics so switching a
+    // printer from leased to owned can clear its lease terms: `undefined`
+    // keeps the current value, an explicit JSON null clears the column.
+    const keep = (v: unknown) => (v === undefined ? undefined : v);
     return queryOne(
       `UPDATE printers SET
-         asset_number    = COALESCE($2, asset_number),
-         model           = COALESCE($3, model),
-         serial_number   = COALESCE($4, serial_number),
-         printer_type    = COALESCE($5, printer_type),
-         department_id   = COALESCE($6, department_id),
-         location        = COALESCE($7, location),
-         building        = COALESCE($8, building),
-         floor           = COALESCE($9, floor),
-         vendor_id       = COALESCE($10, vendor_id),
-         warranty_expiry = COALESCE($11, warranty_expiry),
-         status          = COALESCE($12, status),
-         notes           = COALESCE($13, notes),
-         updated_at      = now()
+         asset_number       = COALESCE($2, asset_number),
+         model              = COALESCE($3, model),
+         serial_number      = COALESCE($4, serial_number),
+         printer_type       = COALESCE($5, printer_type),
+         department_id      = COALESCE($6, department_id),
+         location           = COALESCE($7, location),
+         building           = COALESCE($8, building),
+         floor              = COALESCE($9, floor),
+         vendor_id          = COALESCE($10, vendor_id),
+         warranty_expiry    = COALESCE($11, warranty_expiry),
+         status             = COALESCE($12, status),
+         notes              = COALESCE($13, notes),
+         name               = CASE WHEN $34 THEN $14 ELSE name              END,
+         ip_address         = CASE WHEN $35 THEN $15 ELSE ip_address        END,
+         mac_address        = CASE WHEN $36 THEN $16 ELSE mac_address       END,
+         connection_type    = COALESCE($17, connection_type),
+         is_color           = COALESCE($18, is_color),
+         consumables_model  = CASE WHEN $37 THEN $19 ELSE consumables_model END,
+         lease_start        = CASE WHEN $20 THEN $21::date    ELSE lease_start        END,
+         lease_end          = CASE WHEN $22 THEN $23::date    ELSE lease_end          END,
+         lease_monthly_cost = CASE WHEN $24 THEN $25::numeric ELSE lease_monthly_cost END,
+         purchase_date      = CASE WHEN $26 THEN $27::date    ELSE purchase_date      END,
+         purchase_cost      = CASE WHEN $28 THEN $29::numeric ELSE purchase_cost      END,
+         last_service_date  = CASE WHEN $30 THEN $31::date    ELSE last_service_date  END,
+         next_service_due   = CASE WHEN $32 THEN $33::date    ELSE next_service_due   END,
+         updated_at         = now()
        WHERE id = $1 RETURNING *`,
       [
         id,
@@ -105,6 +129,23 @@ export const printerRepo = {
         data.warrantyExpiry ?? null,
         data.status ?? null,
         data.notes ?? null,
+        data.name ?? null,
+        data.ipAddress ?? null,
+        data.macAddress ?? null,
+        data.connectionType ?? null,
+        data.isColor ?? null,
+        data.consumablesModel ?? null,
+        keep(data.leaseStart) !== undefined, data.leaseStart ?? null,
+        keep(data.leaseEnd) !== undefined, data.leaseEnd ?? null,
+        keep(data.leaseMonthlyCost) !== undefined, data.leaseMonthlyCost ?? null,
+        keep(data.purchaseDate) !== undefined, data.purchaseDate ?? null,
+        keep(data.purchaseCost) !== undefined, data.purchaseCost ?? null,
+        keep(data.lastServiceDate) !== undefined, data.lastServiceDate ?? null,
+        keep(data.nextServiceDue) !== undefined, data.nextServiceDue ?? null,
+        keep(data.name) !== undefined,
+        keep(data.ipAddress) !== undefined,
+        keep(data.macAddress) !== undefined,
+        keep(data.consumablesModel) !== undefined,
       ],
     );
   },

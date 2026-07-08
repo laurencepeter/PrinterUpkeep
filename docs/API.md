@@ -69,9 +69,9 @@ moves are allowed (real processes loop); terminal stages accept no moves.
 | POST | `/vendors` | officer | 409 on duplicate company name (case-insensitive) |
 | PATCH | `/vendors/:id` | officer | |
 | DELETE | `/vendors/:id` | officer | Deactivates (never deletes) |
-| GET | `/printers?search=&department_id=&printer_type=&status=` | any | |
+| GET | `/printers?search=&department_id=&printer_type=&status=` | any | `search` matches asset number, name, model, serial and IP |
 | GET | `/printers/:id/history` | any | Maintenance history (all tickets for the printer) |
-| POST/PATCH | `/printers…` | officer | |
+| POST/PATCH | `/printers…` | officer | Fields incl. `name`, `ipAddress` (validated IPv4, unique), `macAddress`, `connectionType` (network/wifi/usb/other), `isColor`, `consumablesModel`, lease terms (`leaseStart`/`leaseEnd` — end must not precede start — and `leaseMonthlyCost`), `purchaseDate`/`purchaseCost`, `lastServiceDate`/`nextServiceDue`. On PATCH, omitting a lease/purchase/service/network field keeps its value; sending an explicit `null` clears it |
 | GET/POST/PATCH/DELETE | `/departments…` | officer (writes) | DELETE deactivates |
 | GET | `/users` | any | Needed for "Assigned to" dropdowns |
 | POST/PATCH | `/users…` | admin | Passwords bcrypt-hashed |
