@@ -109,14 +109,19 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080
   requisitions (with printable PDF), Accounts & GA approvals, purchase
   orders, delivery notes, attachments, notes, full status history.
 - **Printers** — asset register (owned/leased, warranty, status) with
-  per-printer maintenance history.
+  per-printer maintenance history and a **consumables catalogue** (admin
+  defines each printer's toners/drums/parts by colour + model code, so raising
+  a ticket is just ticking which colour[s] to replace — minimal typing).
 - **Vendors** — CRUD with duplicate prevention and deactivation (never
   deletion — history is preserved).
 - **Departments** — CRUD.
 - **Users** — Admin / ICT Officer / Viewer roles with enforced permissions.
 - **Reports** — monthly repairs, vendor performance, department usage,
   average repair time, consumables cost, most common issues, most repaired
-  printers, tickets by officer, owned vs leased — all exportable.
+  printers, tickets by officer, **user completion scores** (how often cases
+  logged by each user get completed), **IT approvals by department** (who
+  approved and when — a print-to-PDF approval sheet), owned vs leased — all
+  exportable to CSV/Excel/PDF/JSON.
 - **Audit log** — every change stores old value, new value, user and time.
 
 ## Documentation

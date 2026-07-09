@@ -225,6 +225,24 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
   Future<void> _editDialog(Printer? printer) async {
     final departments = ref.read(departmentsProvider).valueOrNull ?? [];
     final vendors = ref.read(vendorsProvider).valueOrNull ?? [];
+
+    // Editable working copy of the printer's consumables/parts catalogue.
+    // Each row is a mutable map; ObjectKey keeps text-field state stable across
+    // add/remove. Loaded up-front for an existing printer.
+    final consumables = <Map<String, dynamic>>[];
+    if (printer != null) {
+      try {
+        final data = await ref.read(apiProvider).get('/api/printers/${printer.id}/consumables');
+        for (final c in (data as List)) {
+          consumables.add({
+            'kind': c['kind'] ?? 'toner',
+            'color': c['color'],
+            'modelCode': c['model_code'] ?? '',
+          });
+        }
+      } catch (_) {/* new/unsaved printers simply start empty */}
+    }
+    if (!mounted) return;
     final asset = TextEditingController(text: printer?.assetNumber ?? '');
     final name = TextEditingController(text: printer?.name ?? '');
     final model = TextEditingController(text: printer?.model ?? '');
@@ -509,6 +527,40 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                     ],
                     onChanged: (v) => setState(() => status = v ?? 'active'),
                   ),
+                  sectionLabel('Consumables & Parts'),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Define the toners/drums/parts this printer takes. Ticket-raisers '
+                      'then just tick which colour(s) to replace — no typing model numbers.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (int i = 0; i < consumables.length; i++)
+                    _consumableRow(context, setState, consumables, i),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(spacing: 8, children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add item'),
+                        onPressed: () => setState(() => consumables.add(
+                            {'kind': 'toner', 'color': isColor ? 'black' : null, 'modelCode': ''})),
+                      ),
+                      if (isColor)
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.palette_outlined, size: 18),
+                          label: const Text('Quick add C/M/Y/K'),
+                          onPressed: () => setState(() {
+                            for (final col in ['black', 'cyan', 'magenta', 'yellow']) {
+                              consumables.add({'kind': 'toner', 'color': col, 'modelCode': ''});
+                            }
+                          }),
+                        ),
+                    ]),
+                  ),
                 ]),
               ),
             ),
@@ -557,18 +609,97 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
     };
     try {
       final api = ref.read(apiProvider);
+      String printerId;
       if (printer == null) {
-        await api.post('/api/printers', body: body);
+        final created = await api.post('/api/printers', body: body);
+        printerId = created['id'] as String;
       } else {
         await api.patch('/api/printers/${printer.id}', body: body);
+        printerId = printer.id;
       }
+      await api.put('/api/printers/$printerId/consumables', body: {
+        'items': [
+          for (final c in consumables)
+            {
+              'kind': c['kind'],
+              'color': c['color'],
+              if ((c['modelCode'] as String?)?.trim().isNotEmpty == true)
+                'modelCode': (c['modelCode'] as String).trim(),
+            },
+        ],
+      });
       ref.invalidate(printersProvider);
+      ref.invalidate(printerConsumablesProvider(printerId));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     }
+  }
+
+  /// One editable row in the printer's consumables catalogue.
+  Widget _consumableRow(
+      BuildContext context, StateSetter setState, List<Map<String, dynamic>> rows, int index) {
+    final c = rows[index];
+    return Padding(
+      key: ObjectKey(c),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: DropdownButtonFormField<String>(
+              value: c['kind'] as String,
+              decoration: const InputDecoration(labelText: 'Type'),
+              items: const [
+                DropdownMenuItem(value: 'toner', child: Text('Toner')),
+                DropdownMenuItem(value: 'ink', child: Text('Ink')),
+                DropdownMenuItem(value: 'drum', child: Text('Drum')),
+                DropdownMenuItem(value: 'maintenance_kit', child: Text('Maint. kit')),
+                DropdownMenuItem(value: 'fuser', child: Text('Fuser')),
+                DropdownMenuItem(value: 'part', child: Text('Part')),
+                DropdownMenuItem(value: 'other', child: Text('Other')),
+              ],
+              onChanged: (v) => setState(() => c['kind'] = v ?? 'toner'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 4,
+            child: DropdownButtonFormField<String?>(
+              value: c['color'] as String?,
+              decoration: const InputDecoration(labelText: 'Colour'),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('N/A')),
+                DropdownMenuItem(value: 'black', child: Text('Black')),
+                DropdownMenuItem(value: 'cyan', child: Text('Cyan')),
+                DropdownMenuItem(value: 'magenta', child: Text('Magenta')),
+                DropdownMenuItem(value: 'yellow', child: Text('Yellow')),
+                DropdownMenuItem(value: 'tricolor', child: Text('Tri-colour')),
+                DropdownMenuItem(value: 'other', child: Text('Other')),
+              ],
+              onChanged: (v) => setState(() => c['color'] = v),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 5,
+            child: TextFormField(
+              initialValue: c['modelCode'] as String? ?? '',
+              decoration: const InputDecoration(labelText: 'Model code', hintText: 'HP 26A (CF226A)'),
+              onChanged: (v) => c['modelCode'] = v,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Remove',
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => setState(() => rows.removeAt(index)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Human-readable lease length, e.g. "2 years 3 months" or "8 months".

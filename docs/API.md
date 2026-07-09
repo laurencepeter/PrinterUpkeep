@@ -41,8 +41,8 @@ an appropriate HTTP status (400 validation, 401 auth, 403 permission,
 | Method | Path | Role | Description |
 |---|---|---|---|
 | GET | `/tickets` | any | Paged list. Filters: `search`, `status`, `stages` (csv of codes), `department_id`, `vendor_id`, `printer_id`, `assigned_to`, `priority`, `printer_type` (owned/leased), `issue_category_id`, `date_from`, `date_to`, `open_only`, `page`, `page_size` |
-| GET | `/tickets/:id` | any | Full detail: ticket, `progress` (0–1), `tracker` (per-stage state: done/current/waiting/blocked/not_started), `history`, `notes`, `files`, `quotations`, `requisitions`, `approvals`, `purchase_orders`, `delivery_notes` |
-| POST | `/tickets` | officer | Create. `reportedBy` required; ticket number auto-generated (`ICT-YYYY-NNNNNN`); starts at stage `open` |
+| GET | `/tickets/:id` | any | Full detail: ticket, `progress` (0–1), `tracker` (per-stage state: done/current/waiting/blocked/not_started), `history`, `notes`, `files`, `quotations`, `requisitions`, `approvals`, `purchase_orders`, `delivery_notes`, `consumables` (requested toners/parts) |
+| POST | `/tickets` | officer | Create. `reportedBy` required; ticket number auto-generated (`ICT-YYYY-NNNNNN`); starts at stage `open`. Optional `consumables: [{consumableId, quantity?}]` records which of the printer's catalogued toners/parts to replace (snapshotted onto the ticket) |
 | PATCH | `/tickets/:id` | officer | Update fields incl. `isBlocked`/`blockedReason` |
 | POST | `/tickets/:id/stage` | officer | `{stage: <code>, notes?}` — inserts stage history (timestamp + user + notes), never overwrites |
 | GET | `/tickets/:id/history` | any | Full stage history |
@@ -50,8 +50,8 @@ an appropriate HTTP status (400 validation, 401 auth, 403 permission,
 | POST | `/tickets/:id/quotations` | officer | Create/update (`id` present = update) quotation |
 | POST | `/tickets/:id/requisitions` | officer | Create (number auto-generated `REQ-YYYY-NNNN`) or update |
 | GET | `/tickets/:id/requisitions/:reqId/pdf` | any | Printable requisition PDF for signing |
-| POST | `/tickets/:id/approvals/accounts` | officer | `{sentDate?, decision?, decisionDate?, notes?}` — decisions: pending / funds_available / funds_unavailable |
-| POST | `/tickets/:id/approvals/ga` | officer | decisions: pending / approved / rejected |
+| POST | `/tickets/:id/approvals/accounts` | officer | `{sentDate?, decision?, decisionDate?, approvedBy?, notes?}` — decisions: pending / funds_available / funds_unavailable |
+| POST | `/tickets/:id/approvals/ga` | officer | `{sentDate?, decision?, decisionDate?, approvedBy?, notes?}` — decisions: pending / approved / rejected |
 | POST | `/tickets/:id/purchase-orders` | officer | `{poNumber, issuedDate?, fileId?}` |
 | POST | `/tickets/:id/delivery-notes` | officer | `{dnNumber?, receivedDate?, fileId?}` |
 
@@ -71,6 +71,8 @@ moves are allowed (real processes loop); terminal stages accept no moves.
 | DELETE | `/vendors/:id` | officer | Deactivates (never deletes) |
 | GET | `/printers?search=&department_id=&printer_type=&status=` | any | `search` matches asset number, name, model, serial and IP |
 | GET | `/printers/:id/history` | any | Maintenance history (all tickets for the printer) |
+| GET | `/printers/:id/consumables` | any | The printer's toner/drum/parts catalogue (for the ticket colour picker) |
+| PUT | `/printers/:id/consumables` | officer | Replace the catalogue: `{items: [{kind, color?, modelCode?, label?}]}` (`kind`: toner/ink/drum/maintenance_kit/fuser/part/other; `color`: black/cyan/magenta/yellow/tricolor/other or null) |
 | POST/PATCH | `/printers…` | officer | Fields incl. `name`, `ipAddress` (validated IPv4, unique), `macAddress`, `connectionType` (network/wifi/usb/other), `isColor`, `consumablesModel`, lease terms (`leaseStart`/`leaseEnd` — end must not precede start — and `leaseMonthlyCost`), `purchaseDate`/`purchaseCost`, `lastServiceDate`/`nextServiceDue`. On PATCH, omitting a lease/purchase/service/network field keeps its value; sending an explicit `null` clears it |
 | GET/POST/PATCH/DELETE | `/departments…` | officer (writes) | DELETE deactivates |
 | GET | `/users` | any | Needed for "Assigned to" dropdowns |
@@ -82,7 +84,7 @@ moves are allowed (real processes loop); terminal stages accept no moves.
 |---|---|---|
 | GET | `/dashboard` | Stats (open, completed today, awaiting vendor/quote/accounts/GA, WIP, completed, closed, owned/leased printers, avg completion days), recent activity, and chart datasets |
 | GET | `/reports` | List of report keys |
-| GET | `/reports/:key?format=json\|csv\|xlsx\|pdf` | Reports: `monthly-repairs`, `vendor-performance`, `department-usage`, `average-repair-time`, `consumables-cost`, `common-issues`, `most-repaired-printers`, `tickets-by-officer`, `owned-vs-leased` |
+| GET | `/reports/:key?format=json\|csv\|xlsx\|pdf` | Reports: `monthly-repairs`, `vendor-performance`, `department-usage`, `average-repair-time`, `consumables-cost`, `common-issues`, `most-repaired-printers`, `tickets-by-officer`, `user-completion` (completion score of cases logged per user), `approvals-by-department` (IT approvals sheet: department, ticket, decision, date, who approved — print to PDF), `owned-vs-leased` |
 | GET | `/export/:entity?format=csv\|xlsx\|pdf\|json` | Entities: `tickets` (accepts ticket filters), `vendors`, `printers`, `departments` |
 | POST | `/export/import/:entity` | Multipart upload (`file`: .csv/.xlsx/.json) for `vendors`, `printers`, `departments`. Duplicates are validated and reported, never overwritten |
 

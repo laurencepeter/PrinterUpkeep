@@ -84,6 +84,39 @@ printerRoutes.get(
   }),
 );
 
+// --- Consumables catalogue (toners / drums / parts this printer takes) ------
+
+printerRoutes.get(
+  '/:id/consumables',
+  asyncHandler(async (req, res) => {
+    res.json(await printerRepo.consumables(req.params.id));
+  }),
+);
+
+const consumableItem = z.object({
+  kind: z.enum(['toner', 'ink', 'drum', 'maintenance_kit', 'fuser', 'part', 'other']).optional(),
+  color: z.enum(['black', 'cyan', 'magenta', 'yellow', 'tricolor', 'other']).nullable().optional(),
+  modelCode: z.string().nullable().optional(),
+  label: z.string().nullable().optional(),
+});
+
+// Replace the whole catalogue for a printer (edit rows on a card, then save).
+printerRoutes.put(
+  '/:id/consumables',
+  writeAccess,
+  asyncHandler(async (req, res) => {
+    const { items } = z.object({ items: z.array(consumableItem) }).parse(req.body);
+    const before = await printerRepo.byId(req.params.id);
+    if (!before) throw new NotFoundError('Printer');
+    const saved = await printerRepo.replaceConsumables(req.params.id, items);
+    await auditRepo.log({
+      entityType: 'printer', entityId: req.params.id, action: 'update',
+      field: 'consumables', newValue: String(items.length), userId: req.user!.id,
+    });
+    res.json(saved);
+  }),
+);
+
 printerRoutes.post(
   '/',
   writeAccess,

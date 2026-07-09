@@ -75,15 +75,22 @@ export const procurementRepo = {
            decision      = COALESCE($3, decision),
            decision_date = COALESCE($4, decision_date),
            notes         = COALESCE($5, notes),
+           approved_by   = COALESCE($6, approved_by),
            updated_at    = now()
          WHERE id = $1 RETURNING *`,
-        [existing.id, data.sentDate ?? null, data.decision ?? null, data.decisionDate ?? null, data.notes ?? null],
+        [
+          existing.id, data.sentDate ?? null, data.decision ?? null, data.decisionDate ?? null,
+          data.notes ?? null, data.approvedBy ?? null,
+        ],
       );
     }
     return queryOne(
-      `INSERT INTO approvals (ticket_id, approval_type, sent_date, decision, decision_date, notes)
-       VALUES ($1, $2, $3, COALESCE($4, 'pending'), $5, $6) RETURNING *`,
-      [ticketId, approvalType, data.sentDate ?? null, data.decision ?? null, data.decisionDate ?? null, data.notes ?? null],
+      `INSERT INTO approvals (ticket_id, approval_type, sent_date, decision, decision_date, notes, approved_by)
+       VALUES ($1, $2, $3, COALESCE($4, 'pending'), $5, $6, $7) RETURNING *`,
+      [
+        ticketId, approvalType, data.sentDate ?? null, data.decision ?? null, data.decisionDate ?? null,
+        data.notes ?? null, data.approvedBy ?? null,
+      ],
     );
   },
 

@@ -208,6 +208,15 @@ export const ticketRepo = {
     return query(`SELECT * FROM purchase_orders WHERE ticket_id = $1 ORDER BY created_at`, [ticketId]);
   },
 
+  /** Consumables/parts a ticket asked to be replaced. */
+  async ticketConsumables(ticketId: string) {
+    return query(
+      `SELECT id, consumable_id, kind, color, label, model_code, quantity
+       FROM ticket_consumables WHERE ticket_id = $1 ORDER BY id`,
+      [ticketId],
+    );
+  },
+
   async deliveryNotes(ticketId: string) {
     return query(`SELECT * FROM delivery_notes WHERE ticket_id = $1 ORDER BY created_at`, [ticketId]);
   },
@@ -251,6 +260,21 @@ export const ticketRepo = {
          VALUES ($1, $2, $3, $4)`,
         [ticket.id, initialStageId, userId, 'Ticket created'],
       );
+
+      // Snapshot each requested consumable from the printer's catalogue so the
+      // ticket keeps a faithful record even if the catalogue changes later.
+      const consumables = Array.isArray(data.consumables)
+        ? (data.consumables as Array<{ consumableId: string; quantity?: number }>)
+        : [];
+      for (const c of consumables) {
+        if (!c.consumableId) continue;
+        await client.query(
+          `INSERT INTO ticket_consumables (ticket_id, consumable_id, kind, color, label, model_code, quantity)
+           SELECT $1, pc.id, pc.kind, pc.color, pc.label, pc.model_code, COALESCE($3, 1)
+           FROM printer_consumables pc WHERE pc.id = $2`,
+          [ticket.id, c.consumableId, c.quantity ?? null],
+        );
+      }
       return ticket as { id: string; ticket_number: string };
     });
   },

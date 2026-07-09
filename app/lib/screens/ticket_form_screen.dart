@@ -33,6 +33,7 @@ class _TicketFormScreenState extends ConsumerState<TicketFormScreen> {
   String? _vendorId;
   int? _issueCategoryId;
   String? _assignedTo;
+  final Set<String> _selectedConsumables = {};
   bool _saving = false;
 
   @override
@@ -154,7 +155,10 @@ class _TicketFormScreenState extends ConsumerState<TicketFormScreen> {
                     label: 'Printer (search by asset tag or model)',
                     entries: [for (final p in printers) (p.id, p.label)],
                     value: _printerId,
-                    onChanged: (v) => setState(() => _printerId = v),
+                    onChanged: (v) => setState(() {
+                      _printerId = v;
+                      _selectedConsumables.clear();
+                    }),
                   ),
                   if (selectedPrinter != null)
                     Padding(
@@ -166,6 +170,7 @@ class _TicketFormScreenState extends ConsumerState<TicketFormScreen> {
                         _kv('Department', selectedPrinter.departmentName ?? '—'),
                       ]),
                     ),
+                  if (_printerId != null) _consumablesSelector(_printerId!),
                 ]),
                 _card('Issue', [
                   Row(children: [
@@ -275,6 +280,8 @@ class _TicketFormScreenState extends ConsumerState<TicketFormScreen> {
         if (_description.text.isNotEmpty) 'description': _description.text,
         if (_ictTicket.text.isNotEmpty) 'ictTicketNumber': _ictTicket.text,
         if (_vendorTicket.text.isNotEmpty) 'vendorTicketNumber': _vendorTicket.text,
+        if (_selectedConsumables.isNotEmpty)
+          'consumables': [for (final id in _selectedConsumables) {'consumableId': id}],
       });
       ref.invalidate(ticketsProvider);
       ref.invalidate(dashboardProvider);
@@ -341,6 +348,67 @@ class _TicketFormScreenState extends ConsumerState<TicketFormScreen> {
         }
       }
     }
+  }
+
+  /// Colour-coded multi-select of the selected printer's consumables catalogue.
+  /// The reporter simply ticks which colour(s)/parts need replacing.
+  Widget _consumablesSelector(String printerId) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: ref.watch(printerConsumablesProvider(printerId)).when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (items) {
+              if (items.isEmpty) {
+                return Text(
+                  'No consumables catalogued for this printer yet. An admin can add its '
+                  'toners/parts on the Printers screen.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Consumables to replace',
+                      style: Theme.of(context).textTheme.labelLarge),
+                  Text('Tick which colour(s)/parts are needed',
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final c in items)
+                        FilterChip(
+                          avatar: _colorDot(c.color),
+                          label: Text(c.fullLabel),
+                          selected: _selectedConsumables.contains(c.id),
+                          onSelected: (sel) => setState(() => sel
+                              ? _selectedConsumables.add(c.id)
+                              : _selectedConsumables.remove(c.id)),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+  }
+
+  /// Small colour swatch for a consumable chip (null for non-colour parts).
+  Widget? _colorDot(String? color) {
+    final swatch = switch (color) {
+      'black' => Colors.black,
+      'cyan' => Colors.cyan,
+      'magenta' => const Color(0xFFD81B60),
+      'yellow' => const Color(0xFFF9A825),
+      'tricolor' => Colors.deepPurple,
+      'other' => Colors.blueGrey,
+      _ => null,
+    };
+    if (swatch == null) return null;
+    return CircleAvatar(radius: 7, backgroundColor: swatch);
   }
 
   // --- Small builders -----------------------------------------------------------

@@ -17,6 +17,8 @@ const REPORTS: Record<string, { title: string; run: () => Promise<Row[]> }> = {
   'common-issues':          { title: 'Most Common Issues',       run: () => reportRepo.commonIssues() as Promise<Row[]> },
   'most-repaired-printers': { title: 'Most Repaired Printers',   run: () => reportRepo.mostRepairedPrinters() as Promise<Row[]> },
   'tickets-by-officer':     { title: 'Tickets by ICT Officer',   run: () => reportRepo.ticketsByOfficer() as Promise<Row[]> },
+  'user-completion':        { title: 'User Completion Scores',   run: () => reportRepo.userCompletionScores() as Promise<Row[]> },
+  'approvals-by-department':{ title: 'IT Approvals by Department', run: () => reportRepo.approvalsByDepartment() as Promise<Row[]> },
   'owned-vs-leased':        { title: 'Owned vs Leased',          run: () => reportRepo.ownedVsLeased() as Promise<Row[]> },
 };
 
