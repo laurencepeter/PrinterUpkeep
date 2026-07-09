@@ -64,8 +64,20 @@ deleted. Powers the per-ticket timeline (“Received 8:45 AM → Vendor Contacte
   file.
 - `approvals` — one structure for both checkpoints, discriminated by
   `approval_type` (`accounts` | `ga`): sent date, decision (pending /
-  approved / rejected / funds_available / funds_unavailable), decision date.
+  approved / rejected / funds_available / funds_unavailable), decision date
+  and `approved_by` (name of the officer who approved — feeds the IT
+  approvals-by-department report).
 - `purchase_orders`, `delivery_notes` — numbers, dates, file links.
+
+### Consumables catalogue
+- `printer_consumables` — the per-printer catalogue of toners/drums/parts an
+  admin maintains: `kind` (toner/ink/drum/maintenance_kit/fuser/part/other),
+  `color` (black/cyan/magenta/yellow/tricolor/other, or NULL for non-colour
+  parts) and `model_code`. Editing replaces the set (old rows soft-removed via
+  `is_active`) so historical ticket references survive.
+- `ticket_consumables` — which catalogue items a ticket asked to replace.
+  Descriptive columns are snapshotted (so later catalogue edits never rewrite
+  history) alongside a nullable `consumable_id` reference.
 
 ### Supporting tables
 - `vendors` — unique index on `lower(company_name)` prevents duplicates;
@@ -74,8 +86,9 @@ deleted. Powers the per-ticket timeline (“Received 8:45 AM → Vendor Contacte
 - `printers` — asset number, friendly name, model, serial, owned/leased,
   department, location/building/floor, vendor, warranty expiry, status
   (active/repair/disposed). Network identity: unique IP address, MAC
-  address, connection type (network/wifi/usb/other), colour/mono flag and
-  consumables (toner) model. Lease terms for leased units: start/end dates
+  address, connection type (network/wifi/usb/other), colour/mono flag and a
+  free-text consumables (toner) model, plus a structured consumables
+  catalogue (see `printer_consumables`). Lease terms for leased units: start/end dates
   (CHECK `lease_end >= lease_start`) and monthly cost; purchase date/cost
   for owned units. Servicing: last service date and next service due — both
   feed the automatic notification scan (`lease_expiry_warn_days`,

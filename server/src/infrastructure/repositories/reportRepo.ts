@@ -87,6 +87,53 @@ export const reportRepo = {
     );
   },
 
+  /**
+   * Completion score per user who *logs* cases: how many of the tickets they
+   * created went on to be completed. Answers "how reliably do cases logged by
+   * each user get resolved".
+   */
+  async userCompletionScores() {
+    return query(`
+      SELECT u.full_name AS user,
+             u.username,
+             count(t.id)::int AS logged,
+             count(t.id) FILTER (WHERE t.completion_date IS NOT NULL)::int AS completed,
+             count(t.id) FILTER (WHERE t.completion_date IS NULL AND NOT ws.is_terminal)::int AS open,
+             CASE WHEN count(t.id) > 0
+                  THEN round(100.0 * count(t.id) FILTER (WHERE t.completion_date IS NOT NULL)
+                             / count(t.id), 1)
+                  ELSE 0 END AS completion_pct
+      FROM users u
+      JOIN tickets t ON t.created_by = u.id
+      JOIN workflow_stages ws ON ws.id = t.current_stage_id
+      GROUP BY u.id, u.full_name, u.username
+      ORDER BY logged DESC
+    `);
+  },
+
+  /**
+   * IT approvals sheet: every Accounts/GA approval that was granted, grouped by
+   * department, showing who approved and on what date. Feeds the printable PDF
+   * the IT department hands over per approval cycle.
+   */
+  async approvalsByDepartment() {
+    return query(`
+      SELECT COALESCE(d.name, 'Unassigned') AS department,
+             t.ticket_number,
+             CASE a.approval_type WHEN 'accounts' THEN 'Accounts' WHEN 'ga' THEN 'GA'
+                  ELSE a.approval_type END AS approval,
+             a.decision,
+             a.decision_date,
+             COALESCE(a.approved_by, '—') AS approved_by,
+             a.sent_date
+      FROM approvals a
+      JOIN tickets t ON t.id = a.ticket_id
+      LEFT JOIN departments d ON d.id = t.department_id
+      WHERE a.decision IN ('approved', 'funds_available')
+      ORDER BY department, a.decision_date DESC NULLS LAST, t.ticket_number
+    `);
+  },
+
   async ticketsByOfficer() {
     return query(`
       SELECT u.full_name AS officer,

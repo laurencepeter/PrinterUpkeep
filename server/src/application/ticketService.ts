@@ -15,7 +15,7 @@ export const ticketService = {
     const ticket = await ticketRepo.byId(id);
     if (!ticket) throw new NotFoundError('Ticket');
 
-    const [history, notes, files, quotations, requisitions, approvals, purchaseOrders, deliveryNotes, stages] =
+    const [history, notes, files, quotations, requisitions, approvals, purchaseOrders, deliveryNotes, consumables, stages] =
       await Promise.all([
         ticketRepo.stageHistory(id),
         ticketRepo.notes(id),
@@ -25,6 +25,7 @@ export const ticketService = {
         ticketRepo.approvals(id),
         ticketRepo.purchaseOrders(id),
         ticketRepo.deliveryNotes(id),
+        ticketRepo.ticketConsumables(id),
         lookupRepo.workflowStages(ticket.asset_type as string),
       ]);
 
@@ -62,6 +63,7 @@ export const ticketService = {
       approvals,
       purchase_orders: purchaseOrders,
       delivery_notes: deliveryNotes,
+      consumables,
     };
   },
 

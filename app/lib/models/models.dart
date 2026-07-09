@@ -153,7 +153,8 @@ class TicketDetail {
         requisitions = (json['requisitions'] as List).cast<Map<String, dynamic>>(),
         approvals = (json['approvals'] as List).cast<Map<String, dynamic>>(),
         purchaseOrders = (json['purchase_orders'] as List).cast<Map<String, dynamic>>(),
-        deliveryNotes = (json['delivery_notes'] as List).cast<Map<String, dynamic>>();
+        deliveryNotes = (json['delivery_notes'] as List).cast<Map<String, dynamic>>(),
+        consumables = (json['consumables'] as List? ?? const []).cast<Map<String, dynamic>>();
 
   final Ticket ticket;
   final double progress;
@@ -166,6 +167,7 @@ class TicketDetail {
   final List<Map<String, dynamic>> approvals;
   final List<Map<String, dynamic>> purchaseOrders;
   final List<Map<String, dynamic>> deliveryNotes;
+  final List<Map<String, dynamic>> consumables;
 }
 
 class TicketPage {
@@ -278,6 +280,38 @@ class Printer {
     if (!isLeased || (leaseStart == null && leaseEnd == null)) return null;
     String d(String? v) => v == null ? '?' : v.substring(0, v.length >= 10 ? 10 : v.length);
     return '${d(leaseStart)} → ${d(leaseEnd)}';
+  }
+}
+
+/// One item in a printer's consumables/parts catalogue (a toner, drum, part…),
+/// defined by an admin so ticket-raisers pick from a list instead of typing.
+class PrinterConsumable {
+  PrinterConsumable.fromJson(Map<String, dynamic> json)
+      : id = json['id'],
+        kind = json['kind'] ?? 'toner',
+        color = _s(json['color']),
+        modelCode = _s(json['model_code']),
+        label = _s(json['label']);
+
+  final String id;
+  final String kind;
+  final String? color;
+  final String? modelCode;
+  final String? label;
+
+  static String titleCase(String v) =>
+      v.split('_').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+
+  /// Short label for a selection chip, e.g. "Black" or "Drum".
+  String get shortLabel =>
+      color != null ? titleCase(color!) : (label?.isNotEmpty == true ? label! : titleCase(kind));
+
+  /// Full descriptive label, e.g. "Black Toner — HP 26A (CF226A)".
+  String get fullLabel {
+    final base = label?.isNotEmpty == true
+        ? label!
+        : [if (color != null) titleCase(color!), titleCase(kind)].join(' ');
+    return modelCode?.isNotEmpty == true ? '$base — $modelCode' : base;
   }
 }
 

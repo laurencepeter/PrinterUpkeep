@@ -61,6 +61,10 @@ const createSchema = z.object({
   description: z.string().optional(),
   vendorId: z.string().uuid().optional(),
   assignedTo: z.string().uuid().optional(),
+  // Consumables the reporter ticked (which colours/parts to replace).
+  consumables: z
+    .array(z.object({ consumableId: z.string().uuid(), quantity: z.number().int().positive().optional() }))
+    .optional(),
 });
 
 ticketRoutes.post(

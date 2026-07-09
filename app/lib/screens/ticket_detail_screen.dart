@@ -128,6 +128,24 @@ class _TicketDetailView extends ConsumerWidget {
                     Text('Category: ${t.issueCategory ?? '—'}'),
                     const SizedBox(height: 6),
                     Text(t.description ?? 'No description'),
+                    if (detail.consumables.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text('Consumables requested',
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          for (final c in detail.consumables)
+                            Chip(
+                              avatar: _colorDot(c['color']?.toString()),
+                              label: Text(_consumableLabel(c)),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -271,10 +289,7 @@ class _TicketDetailView extends ConsumerWidget {
           Text('Accounts', style: Theme.of(context).textTheme.titleSmall),
           row(
             'Funds',
-            accounts.isEmpty
-                ? 'Not sent yet'
-                : '${_title(accounts.last['decision']?.toString())} · sent ${_dateOnly(accounts.last['sent_date']?.toString())}'
-                    '${accounts.last['decision_date'] != null ? ' · confirmed ${_dateOnly(accounts.last['decision_date']?.toString())}' : ''}',
+            accounts.isEmpty ? 'Not sent yet' : _approvalSummary(accounts.last),
             onEdit: () => _approvalDialog(context, ref, 'accounts',
                 accounts.isEmpty ? null : accounts.last),
           ),
@@ -282,9 +297,7 @@ class _TicketDetailView extends ConsumerWidget {
           Text('GA', style: Theme.of(context).textTheme.titleSmall),
           row(
             'Approval',
-            ga.isEmpty
-                ? 'Not sent yet'
-                : '${_title(ga.last['decision']?.toString())} · sent ${_dateOnly(ga.last['sent_date']?.toString())}',
+            ga.isEmpty ? 'Not sent yet' : _approvalSummary(ga.last),
             onEdit: () => _approvalDialog(context, ref, 'ga', ga.isEmpty ? null : ga.last),
           ),
           const Divider(),
@@ -537,6 +550,7 @@ class _TicketDetailView extends ConsumerWidget {
     String decision = existing?['decision']?.toString() ?? 'pending';
     DateTime? sent = DateTime.tryParse(existing?['sent_date']?.toString() ?? '');
     DateTime? decided = DateTime.tryParse(existing?['decision_date']?.toString() ?? '');
+    final approvedBy = TextEditingController(text: existing?['approved_by']?.toString() ?? '');
 
     final ok = await showDialog<bool>(
       context: context,
@@ -576,6 +590,14 @@ class _TicketDetailView extends ConsumerWidget {
                     if (d != null) setState(() => decided = d);
                   },
                 ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: approvedBy,
+                  decoration: InputDecoration(
+                    labelText: 'Approved by',
+                    hintText: type == 'accounts' ? 'Accounts officer name' : 'GA officer name',
+                  ),
+                ),
               ],
             ),
           ),
@@ -592,6 +614,7 @@ class _TicketDetailView extends ConsumerWidget {
           'decision': decision,
           if (sent != null) 'sentDate': DateFormat('y-MM-dd').format(sent!),
           if (decided != null) 'decisionDate': DateFormat('y-MM-dd').format(decided!),
+          if (approvedBy.text.trim().isNotEmpty) 'approvedBy': approvedBy.text.trim(),
         });
       });
     }
@@ -707,6 +730,47 @@ class _TicketDetailView extends ConsumerWidget {
             .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
       }
     }
+  }
+
+  /// One-line summary of an approval row: decision, dates and who approved.
+  static String _approvalSummary(Map<String, dynamic> a) {
+    final parts = <String>[_title(a['decision']?.toString())];
+    if (a['sent_date'] != null) parts.add('sent ${_dateOnly(a['sent_date']?.toString())}');
+    if (a['decision_date'] != null) {
+      parts.add('decided ${_dateOnly(a['decision_date']?.toString())}');
+    }
+    final by = a['approved_by']?.toString();
+    if (by != null && by.isNotEmpty && by != '—') parts.add('by $by');
+    return parts.join(' · ');
+  }
+
+  /// Label for a requested consumable chip, e.g. "Black Toner ×2 (HP 26A)".
+  static String _consumableLabel(Map<String, dynamic> c) {
+    final color = c['color']?.toString();
+    final label = c['label']?.toString();
+    final kind = c['kind']?.toString() ?? '';
+    var text = label != null && label.isNotEmpty
+        ? label
+        : [if (color != null && color.isNotEmpty) _title(color), _title(kind)].join(' ');
+    final qty = c['quantity'];
+    if (qty is int && qty > 1) text = '$text ×$qty';
+    final model = c['model_code']?.toString();
+    if (model != null && model.isNotEmpty) text = '$text ($model)';
+    return text;
+  }
+
+  /// Small colour swatch avatar for a consumable chip (null for non-colour).
+  static Widget? _colorDot(String? color) {
+    final swatch = switch (color) {
+      'black' => Colors.black,
+      'cyan' => Colors.cyan,
+      'magenta' => const Color(0xFFD81B60),
+      'yellow' => const Color(0xFFF9A825),
+      'tricolor' => Colors.deepPurple,
+      'other' => Colors.blueGrey,
+      _ => null,
+    };
+    return swatch == null ? null : CircleAvatar(radius: 7, backgroundColor: swatch);
   }
 
   // --- Formatting -------------------------------------------------------------

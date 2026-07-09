@@ -1,4 +1,4 @@
-import { query, queryOne } from '../../db/pool';
+import { query, queryOne, withTransaction } from '../../db/pool';
 
 const SELECT = `
   SELECT p.*, d.name AS department_name, v.company_name AS vendor_name
@@ -148,6 +148,56 @@ export const printerRepo = {
         keep(data.consumablesModel) !== undefined,
       ],
     );
+  },
+
+  /** The consumables/parts catalogue an admin has defined for this printer. */
+  async consumables(printerId: string) {
+    return query(
+      `SELECT id, printer_id, kind, color, model_code, label, sort_order, is_active
+       FROM printer_consumables
+       WHERE printer_id = $1 AND is_active
+       ORDER BY sort_order, kind, color`,
+      [printerId],
+    );
+  },
+
+  /**
+   * Replace a printer's consumables catalogue wholesale. The card editor sends
+   * the full desired set; existing rows are soft-removed (is_active = false) so
+   * historical ticket references remain intact, then the new set is inserted.
+   */
+  async replaceConsumables(
+    printerId: string,
+    items: Array<{ kind?: string; color?: string | null; modelCode?: string | null; label?: string | null }>,
+  ) {
+    return withTransaction(async (client) => {
+      await client.query(`UPDATE printer_consumables SET is_active = FALSE WHERE printer_id = $1`, [
+        printerId,
+      ]);
+      let order = 0;
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO printer_consumables (printer_id, kind, color, model_code, label, sort_order)
+           VALUES ($1, COALESCE($2, 'toner'), $3, $4, $5, $6)`,
+          [
+            printerId,
+            item.kind ?? null,
+            item.color ?? null,
+            item.modelCode ?? null,
+            item.label ?? null,
+            order++,
+          ],
+        );
+      }
+      const result = await client.query(
+        `SELECT id, printer_id, kind, color, model_code, label, sort_order, is_active
+         FROM printer_consumables
+         WHERE printer_id = $1 AND is_active
+         ORDER BY sort_order, kind, color`,
+        [printerId],
+      );
+      return result.rows;
+    });
   },
 
   /** Maintenance history: all tickets ever raised for this printer. */

@@ -114,6 +114,15 @@ final printersProvider = FutureProvider<List<Printer>>((ref) async {
   return (data as List).map((e) => Printer.fromJson(e)).toList();
 });
 
+/// A single printer's consumables catalogue (toners/drums/parts), used by the
+/// ticket form so the reporter simply ticks which colour(s)/parts to replace.
+final printerConsumablesProvider =
+    FutureProvider.family<List<PrinterConsumable>, String>((ref, printerId) async {
+  ref.watch(authProvider);
+  final data = await ref.read(apiProvider).get('/api/printers/$printerId/consumables');
+  return (data as List).map((e) => PrinterConsumable.fromJson(e)).toList();
+});
+
 final usersProvider = FutureProvider<List<UserAccount>>((ref) async {
   ref.watch(authProvider);
   final data = await ref.read(apiProvider).get('/api/users');
