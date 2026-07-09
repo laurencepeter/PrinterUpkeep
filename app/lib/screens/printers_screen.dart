@@ -229,12 +229,12 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
     // Editable working copy of the printer's consumables/parts catalogue.
     // Each row is a mutable map; ObjectKey keeps text-field state stable across
     // add/remove. Loaded up-front for an existing printer.
-    final consumables = <Map<String, dynamic>>[];
+    final consumableRows = <Map<String, dynamic>>[];
     if (printer != null) {
       try {
         final data = await ref.read(apiProvider).get('/api/printers/${printer.id}/consumables');
         for (final c in (data as List)) {
-          consumables.add({
+          consumableRows.add({
             'kind': c['kind'] ?? 'toner',
             'color': c['color'],
             'modelCode': c['model_code'] ?? '',
@@ -537,8 +537,8 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  for (int i = 0; i < consumables.length; i++)
-                    _consumableRow(context, setState, consumables, i),
+                  for (int i = 0; i < consumableRows.length; i++)
+                    _consumableRow(context, setState, consumableRows, i),
                   const SizedBox(height: 4),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -546,7 +546,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                       OutlinedButton.icon(
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add item'),
-                        onPressed: () => setState(() => consumables.add(
+                        onPressed: () => setState(() => consumableRows.add(
                             {'kind': 'toner', 'color': isColor ? 'black' : null, 'modelCode': ''})),
                       ),
                       if (isColor)
@@ -555,7 +555,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                           label: const Text('Quick add C/M/Y/K'),
                           onPressed: () => setState(() {
                             for (final col in ['black', 'cyan', 'magenta', 'yellow']) {
-                              consumables.add({'kind': 'toner', 'color': col, 'modelCode': ''});
+                              consumableRows.add({'kind': 'toner', 'color': col, 'modelCode': ''});
                             }
                           }),
                         ),
@@ -619,7 +619,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
       }
       await api.put('/api/printers/$printerId/consumables', body: {
         'items': [
-          for (final c in consumables)
+          for (final c in consumableRows)
             {
               'kind': c['kind'],
               'color': c['color'],
