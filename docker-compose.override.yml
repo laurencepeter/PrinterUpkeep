@@ -1,0 +1,17 @@
+# Local / direct-host overrides for a plain `docker compose up`.
+#
+# Docker Compose auto-merges this file ONLY when you run `docker compose`
+# with no explicit `-f` flag (i.e. the documented `docker compose up -d --build`).
+# It publishes the web UI on a host port so you can reach it at
+# http://<server>:${WEB_PORT:-8000} without any external reverse proxy.
+#
+# Managed platforms that build the stack themselves (e.g. Coolify runs
+# `docker compose -f docker-compose.yml up -d`) pass an explicit `-f`, which
+# disables automatic override loading — so this host-port bind is skipped there
+# and the platform's own proxy handles routing to the container instead. That
+# avoids "Bind for 0.0.0.0:8000 failed: port is already allocated" on the
+# shared host.
+services:
+  web:
+    ports:
+      - "${WEB_PORT:-8000}:80"

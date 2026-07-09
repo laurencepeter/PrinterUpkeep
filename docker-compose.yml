@@ -62,8 +62,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "${WEB_PORT:-8000}:80"
+    # No fixed host port is published here on purpose. On a managed PaaS
+    # (Coolify, etc.) the platform's reverse proxy routes your domain to this
+    # container's port 80, so binding a host port would only cause
+    # "port is already allocated" collisions on the shared host.
+    # For a plain `docker compose up`, docker-compose.override.yml publishes
+    # ${WEB_PORT:-8000}:80 automatically — see that file.
+    expose:
+      - "80"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
       interval: 10s
