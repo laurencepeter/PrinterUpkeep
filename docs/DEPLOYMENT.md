@@ -46,6 +46,25 @@ docker compose up -d --build
 - The web container proxies `/api/*` to the API container, so only
   `WEB_PORT` needs to be reachable by users.
 
+### Building on a managed host / PaaS
+
+This is a **multi-service** app (PostgreSQL + API + web), so there is
+deliberately **no root `Dockerfile`** — the two custom images are built from
+`server/Dockerfile` and `app/Dockerfile`, wired together by the root
+`docker-compose.yml`. When deploying on a platform that builds automatically,
+set the build type to **Docker Compose** (pointing at `docker-compose.yml`),
+**not** "Dockerfile". A plain `docker build` at the repo root will fail with
+`open Dockerfile: no such file or directory` because there is nothing single
+image to build — Compose builds all services:
+
+```bash
+docker compose up -d --build   # builds api + web, starts the whole stack
+```
+
+Both custom services expose health checks (`api` → `GET /api/health`,
+`web` → `GET /`) so the platform can gate the release on a healthy stack, and
+`web` only starts once `api` reports healthy.
+
 ### TLS / HTTPS
 
 Put your standard reverse proxy (nginx, Caddy, Traefik or the ministry's

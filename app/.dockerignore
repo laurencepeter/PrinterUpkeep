@@ -1,0 +1,16 @@
+.dart_tool
+build
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+android
+ios
+linux
+macos
+windows
+web
+test
+.git
+Dockerfile
+.dockerignore
