@@ -1,3 +1,12 @@
+# Full application stack for PrinterUpkeep.
+#
+# Everything is built from source on deploy — there is no root Dockerfile
+# because this is a multi-service app. Point your host/PaaS at this file
+# (build type: "Docker Compose") and it will build the api + web images and
+# start them alongside PostgreSQL:
+#
+#   docker compose up -d --build
+#
 services:
   db:
     image: postgres:16-alpine
@@ -15,7 +24,9 @@ services:
       retries: 10
 
   api:
-    build: ./server
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       db:
@@ -36,14 +47,29 @@ services:
       ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-System Administrator}
     volumes:
       - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   web:
-    build: ./app
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "${WEB_PORT:-8000}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   pgdata:
