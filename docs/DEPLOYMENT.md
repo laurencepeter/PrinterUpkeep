@@ -46,6 +46,12 @@ docker compose up -d --build
 - The web container proxies `/api/*` to the API container, so only
   `WEB_PORT` needs to be reachable by users.
 
+The `docker compose up` above (no `-f` flag) auto-merges
+`docker-compose.override.yml`, which publishes the web UI on the host at
+`http://<server>:${WEB_PORT:-8000}`. That override is where the host-port
+bind lives — the base `docker-compose.yml` only `expose`s port 80 so that
+managed platforms can proxy to it instead (see below).
+
 ### Building on a managed host / PaaS
 
 This is a **multi-service** app (PostgreSQL + API + web), so there is
@@ -64,6 +70,20 @@ docker compose up -d --build   # builds api + web, starts the whole stack
 Both custom services expose health checks (`api` → `GET /api/health`,
 `web` → `GET /`) so the platform can gate the release on a healthy stack, and
 `web` only starts once `api` reports healthy.
+
+**Ports on a managed host.** The base `docker-compose.yml` deliberately does
+**not** publish a fixed host port for `web` — it only `expose`s port 80.
+Managed platforms build with an explicit file flag
+(`docker compose -f docker-compose.yml up -d`), which disables Compose's
+automatic override loading, so the host-port bind in
+`docker-compose.override.yml` is skipped and the platform's own reverse proxy
+routes your domain to the container. This avoids
+`Bind for 0.0.0.0:8000 failed: port is already allocated` when port 8000 is
+already taken on the shared host. Point the service at your domain in the
+platform UI (e.g. Coolify's Domains field); nothing else is required. If you
+still want a fixed host port on such a platform, add a `ports:` mapping to the
+service in the platform's compose configuration and pick a port you know is
+free.
 
 ### TLS / HTTPS
 
