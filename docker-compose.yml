@@ -55,9 +55,14 @@ services:
       start_period: 30s
 
   web:
-    build:
-      context: ./app
-      dockerfile: Dockerfile
+    # Pre-built by CI (.github/workflows/build-web-image.yml) and pulled at
+    # deploy time — the Flutter web build is far too slow/heavy (~2 GB SDK
+    # image) to build inside a managed host's deploy window, so we build it on
+    # GitHub Actions instead and the deploy host just pulls this small nginx
+    # image. Override WEB_IMAGE to pin a specific tag/digest.
+    # For local development, docker-compose.override.yml re-adds a build context
+    # so `docker compose up --build` still builds web from ./app source.
+    image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
     restart: unless-stopped
     depends_on:
       api:
