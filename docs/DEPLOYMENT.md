@@ -55,21 +55,55 @@ managed platforms can proxy to it instead (see below).
 ### Building on a managed host / PaaS
 
 This is a **multi-service** app (PostgreSQL + API + web), so there is
-deliberately **no root `Dockerfile`** — the two custom images are built from
-`server/Dockerfile` and `app/Dockerfile`, wired together by the root
-`docker-compose.yml`. When deploying on a platform that builds automatically,
-set the build type to **Docker Compose** (pointing at `docker-compose.yml`),
-**not** "Dockerfile". A plain `docker build` at the repo root will fail with
-`open Dockerfile: no such file or directory` because there is nothing single
-image to build — Compose builds all services:
+deliberately **no root `Dockerfile`**. When deploying on a platform that builds
+automatically, set the build type to **Docker Compose** (pointing at
+`docker-compose.yml`), **not** "Dockerfile". A plain `docker build` at the repo
+root will fail with `open Dockerfile: no such file or directory` because there
+is no single image to build.
 
-```bash
-docker compose up -d --build   # builds api + web, starts the whole stack
-```
+On a managed host the stack is assembled from two sources:
+
+- **`api`** is built on the deploy host from `server/Dockerfile` (a quick
+  Node build).
+- **`web`** is **not** built on the deploy host. The Flutter web build pulls a
+  ~2 GB SDK image and takes several minutes — too slow/heavy for a typical
+  deploy window (it was timing out mid-compile). Instead it is **pre-built by
+  GitHub Actions** (`.github/workflows/build-web-image.yml`) and published to
+  GHCR as `ghcr.io/<owner>/printerupkeep-web:main`; the deploy host just
+  **pulls** that small nginx image. See
+  [Pre-built web image](#pre-built-web-image) below for the one-time setup.
 
 Both custom services expose health checks (`api` → `GET /api/health`,
 `web` → `GET /`) so the platform can gate the release on a healthy stack, and
 `web` only starts once `api` reports healthy.
+
+#### Pre-built web image
+
+The `web` service in `docker-compose.yml` references a registry image:
+
+```yaml
+image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
+```
+
+- **CI publishes it.** On every push to `main` that touches `app/**`, the
+  `Build web image` workflow builds `app/Dockerfile` and pushes
+  `:main`, `:latest`, and `:sha-<commit>` tags to GHCR. You can also run it
+  manually from the Actions tab (**Run workflow**) — do this once before the
+  first deploy so the `:main` tag exists.
+- **Let CI finish before deploying.** If your platform auto-deploys on push,
+  the deploy may start before the image is published and fail to pull. Either
+  wait for the workflow to go green, or trigger the deploy afterward.
+- **Registry access.** GHCR packages are private by default. Either make the
+  `printerupkeep-web` package **public** (Package settings → Change visibility)
+  so the host can pull it anonymously, or add a GHCR pull credential (a PAT with
+  `read:packages`) to your platform's registry settings.
+- **Pinning.** `WEB_IMAGE` overrides the tag/digest, e.g.
+  `WEB_IMAGE=ghcr.io/laurencepeter/printerupkeep-web:sha-<commit>` to pin an
+  exact build instead of following `:main`.
+
+Local development is unaffected: `docker-compose.override.yml` re-adds a build
+context for `web`, so `docker compose up -d --build` still builds it from
+`./app` source (no registry access needed).
 
 **Ports on a managed host.** The base `docker-compose.yml` deliberately does
 **not** publish a fixed host port for `web` — it only `expose`s port 80.
@@ -129,7 +163,8 @@ docker compose up -d --build     # migrations apply automatically
 | `UPLOAD_DIR` | ./uploads | Attachment storage (volume-mounted in Docker) |
 | `MAX_FILE_SIZE_MB` | 20 | Upload limit |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_FULL_NAME` | admin / ChangeMe123! / … | First-boot admin bootstrap |
-| `WEB_PORT` | 8000 | Public port served by nginx |
+| `WEB_PORT` | 8000 | Host port for the web UI (local / direct deploys only; see override) |
+| `WEB_IMAGE` | `ghcr.io/laurencepeter/printerupkeep-web:main` | Pre-built web image pulled on managed hosts; override to pin a tag/digest |
 
 ## Future: cloud & SSO
 
