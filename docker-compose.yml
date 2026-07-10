@@ -70,8 +70,13 @@ services:
     # ${WEB_PORT:-8000}:80 automatically — see that file.
     expose:
       - "80"
+    # Use 127.0.0.1, not localhost: nginx here listens on IPv4 only (`listen 80;`)
+    # and the image's ipv6-by-default entrypoint skips adding `listen [::]:80;`
+    # because this custom default.conf differs from the packaged one. busybox
+    # wget resolves `localhost` to ::1 first, gets connection-refused, and the
+    # container is reported unhealthy even though nginx is serving fine.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
