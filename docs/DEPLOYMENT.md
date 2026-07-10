@@ -80,10 +80,19 @@ automatic override loading, so the host-port bind in
 routes your domain to the container. This avoids
 `Bind for 0.0.0.0:8000 failed: port is already allocated` when port 8000 is
 already taken on the shared host. Point the service at your domain in the
-platform UI (e.g. Coolify's Domains field); nothing else is required. If you
+platform UI (e.g. Coolify's Domains field). If you
 still want a fixed host port on such a platform, add a `ports:` mapping to the
 service in the platform's compose configuration and pick a port you know is
 free.
+
+The `web` service also carries a `SERVICE_FQDN_WEB_80` environment key. On
+Coolify this is the routing signal that marks `web` as the HTTP entrypoint,
+attaches it to the Traefik proxy network and routes your domain to port 80.
+Without it, a domain set only in the UI does not always get a proxy backend,
+and Traefik answers **"no available server"** even though the container is
+healthy. The key is inert outside Coolify (an unset env var nginx ignores), so
+a plain `docker compose up` is unaffected. After adding/​changing it, redeploy
+so Coolify regenerates the proxy config.
 
 ### TLS / HTTPS
 

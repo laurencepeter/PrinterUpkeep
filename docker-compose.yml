@@ -70,6 +70,18 @@ services:
     # ${WEB_PORT:-8000}:80 automatically — see that file.
     expose:
       - "80"
+    environment:
+      # Coolify routing signal. In a Docker Compose resource, a UI-set domain
+      # alone does not reliably make Coolify attach the service to the Traefik
+      # proxy network and emit the loadbalancer port label — so Traefik has no
+      # backend endpoint and returns "no available server" even when this
+      # container is healthy. The magic `SERVICE_FQDN_<service>_<port>` key
+      # tells Coolify: `web` is THE HTTP entrypoint, route the domain to port
+      # 80, and wire up the proxy network. The value is passed through from the
+      # host (Coolify supplies your configured domain); outside Coolify it is
+      # simply an unset env var that nginx ignores, so plain `docker compose up`
+      # is unaffected.
+      - SERVICE_FQDN_WEB_80
     # Use 127.0.0.1, not localhost: nginx here listens on IPv4 only (`listen 80;`)
     # and the image's ipv6-by-default entrypoint skips adding `listen [::]:80;`
     # because this custom default.conf differs from the packaged one. busybox
