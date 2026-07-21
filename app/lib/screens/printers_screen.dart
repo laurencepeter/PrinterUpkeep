@@ -164,7 +164,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
               const SizedBox(height: 8),
               Text(
                 'Department · IP Address · Model · Serial Number · Status · '
-                'Ownership Status · Toner Model · Waste Toner Model · Item Type · Path',
+                'Ownership Status · Toner Model · Waste Toner Model · Path',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),

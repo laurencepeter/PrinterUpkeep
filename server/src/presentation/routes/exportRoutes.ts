@@ -313,12 +313,8 @@ exportRoutes.post(
         const isColor = toners.some((t) => ['cyan', 'magenta', 'yellow'].includes(t.color ?? ''));
 
         // Columns with no dedicated printer field are preserved in notes.
-        const itemType = pick(row, 'item_type', 'type', 'category');
         const path = pick(row, 'path', 'network_path', 'location_path');
-        const notes = [
-          itemType ? `Item Type: ${itemType}` : null,
-          path ? `Path: ${path}` : null,
-        ].filter(Boolean).join(' | ') || undefined;
+        const notes = path ? `Path: ${path}` : undefined;
 
         const created = await printerRepo.create({
           assetNumber,
