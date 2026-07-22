@@ -239,7 +239,14 @@ class Printer {
         purchaseDate = _s(json['purchase_date']),
         purchaseCost = _d(json['purchase_cost']),
         lastServiceDate = _s(json['last_service_date']),
-        nextServiceDue = _s(json['next_service_due']);
+        nextServiceDue = _s(json['next_service_due']),
+        totalIssues = _i(json['total_issues']),
+        openIssues = _i(json['open_issues']),
+        lastActivity = _s(json['last_activity']),
+        lastTicketId = _s(json['last_ticket_id']),
+        lastTicketNumber = _s(json['last_ticket_number']),
+        lastStatusLabel = _s(json['last_status_label']),
+        lastIssue = _s(json['last_issue']);
 
   final String id;
   final String assetNumber;
@@ -270,7 +277,24 @@ class Printer {
   final String? lastServiceDate;
   final String? nextServiceDue;
 
+  // Per-printer activity summary (see printerRepo.SELECT).
+  final int totalIssues;
+  final int openIssues;
+  final String? lastActivity;
+  final String? lastTicketId;
+  final String? lastTicketNumber;
+  final String? lastStatusLabel;
+  final String? lastIssue;
+
   bool get isLeased => printerType == 'leased';
+
+  /// Short human-readable summary of the most recent activity, e.g.
+  /// "2026-07-14 · Work In Progress" or "No issues logged".
+  String get lastActivitySummary {
+    if (lastActivity == null) return 'No issues logged';
+    final date = lastActivity!.length >= 10 ? lastActivity!.substring(0, 10) : lastActivity!;
+    return lastStatusLabel == null ? date : '$date · $lastStatusLabel';
+  }
 
   String get label =>
       name?.isNotEmpty == true ? '$assetNumber — $name ($model)' : '$assetNumber — $model';

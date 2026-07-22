@@ -18,6 +18,7 @@ class AppShell extends ConsumerWidget {
     (route: '/vendors', icon: Icons.storefront_outlined, label: 'Vendors'),
     (route: '/departments', icon: Icons.apartment_outlined, label: 'Departments'),
     (route: '/reports', icon: Icons.bar_chart_outlined, label: 'Reports'),
+    (route: '/executive', icon: Icons.insights_outlined, label: 'Executive'),
     (route: '/users', icon: Icons.group_outlined, label: 'Users'),
   ];
 

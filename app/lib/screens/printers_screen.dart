@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../core/api_client.dart';
 import '../core/theme.dart';
@@ -136,6 +137,8 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
               DataColumn(label: Text('Location')),
               DataColumn(label: Text('Next Service')),
               DataColumn(label: Text('Status')),
+              DataColumn(label: Text('Issues')),
+              DataColumn(label: Text('Last Activity')),
               DataColumn(label: Text('Actions')),
             ],
             rows: [
@@ -155,7 +158,9 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                   DataCell(Text(p.departmentName ?? '—')),
                   DataCell(Text(p.location ?? '—')),
                   DataCell(Text(p.nextServiceDue?.substring(0, 10) ?? '—')),
-                  DataCell(StatusBadge(p.status, dense: true)),
+                  DataCell(PrinterStatusBadge(p.status, dense: true)),
+                  DataCell(_issuesCell(p)),
+                  DataCell(Text(p.lastActivitySummary)),
                   DataCell(Row(mainAxisSize: MainAxisSize.min, children: _rowActions(p, canWrite, isAdmin))),
                 ]),
             ],
@@ -198,7 +203,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                     ],
                   ),
                 ),
-                StatusBadge(p.status),
+                PrinterStatusBadge(p.status),
               ],
             ),
             const SizedBox(height: 8),
@@ -225,6 +230,23 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
               if (p.nextServiceDue != null)
                 Text('Next service: ${p.nextServiceDue!.substring(0, 10)}', style: muted),
             ]),
+            const SizedBox(height: 6),
+            Row(children: [
+              Icon(Icons.history, size: 14, color: muted?.color),
+              const SizedBox(width: 4),
+              Expanded(child: Text('Last activity: ${p.lastActivitySummary}', style: muted)),
+              if (p.totalIssues > 0)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    '${p.openIssues} open / ${p.totalIssues}',
+                    style: muted?.copyWith(
+                      color: p.openIssues > 0 ? const Color(0xFFEF6C00) : muted?.color,
+                      fontWeight: p.openIssues > 0 ? FontWeight.w600 : null,
+                    ),
+                  ),
+                ),
+            ]),
             const SizedBox(height: 4),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: _rowActions(p, canWrite, isAdmin)),
           ],
@@ -236,6 +258,13 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
   /// Shared row/card actions: details, edit, and (admins) quick status changes
   /// and delete.
   List<Widget> _rowActions(Printer p, bool canWrite, bool isAdmin) => [
+        IconButton(
+          tooltip: p.totalIssues > 0
+              ? 'View all issues (${p.totalIssues})'
+              : 'View issues',
+          icon: const Icon(Icons.receipt_long_outlined, size: 20),
+          onPressed: () => _viewIssues(p),
+        ),
         IconButton(
           tooltip: 'Details & maintenance history',
           icon: const Icon(Icons.info_outline, size: 20),
@@ -285,6 +314,27 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
           title: Text(label),
         ),
       );
+
+  /// "open / total" issue count for a printer, open highlighted when > 0.
+  Widget _issuesCell(Printer p) {
+    if (p.totalIssues == 0) return const Text('—');
+    final hasOpen = p.openIssues > 0;
+    return Text(
+      '${p.openIssues} open / ${p.totalIssues}',
+      style: TextStyle(
+        color: hasOpen ? const Color(0xFFEF6C00) : null,
+        fontWeight: hasOpen ? FontWeight.w600 : null,
+      ),
+    );
+  }
+
+  /// Jump to the Tickets screen pre-filtered to this printer, so IT can drill
+  /// into every issue logged against it.
+  void _viewIssues(Printer p) {
+    ref.read(ticketFiltersProvider.notifier).state =
+        TicketFilters(printerId: p.id, printerLabel: p.label);
+    context.go('/tickets');
+  }
 
   /// Quick status change (admin) — used for the Set active/inactive/repair/
   /// disposed shortcuts. Goes through the normal PATCH so it is audit-logged.
@@ -513,7 +563,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                 _kv('Colour', p.isColor ? 'Colour' : 'Mono'),
                 _kv('Consumables', p.consumablesModel ?? '—'),
                 _kv('Type', p.printerType.toUpperCase()),
-                _kvChild('Status', StatusBadge(p.status, dense: true)),
+                _kvChild('Status', PrinterStatusBadge(p.status, dense: true)),
                 if (p.isLeased) _kv('Lease Period', p.leasePeriod ?? '—'),
                 if (p.isLeased)
                   _kv('Monthly Cost',

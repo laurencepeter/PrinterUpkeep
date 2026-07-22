@@ -171,8 +171,8 @@ class PrinterStatusColors {
 
 /// A soft, colour-coded status pill used across printer views. Animates its
 /// colour when the underlying status changes.
-class StatusBadge extends StatelessWidget {
-  const StatusBadge(this.status, {super.key, this.dense = false});
+class PrinterStatusBadge extends StatelessWidget {
+  const PrinterStatusBadge(this.status, {super.key, this.dense = false});
 
   final String status;
   final bool dense;

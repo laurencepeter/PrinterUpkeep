@@ -147,6 +147,61 @@ export const reportRepo = {
     `);
   },
 
+  /**
+   * Per-printer activity log: how many issues each printer has had, how many
+   * are still open, when it was last touched and its most common issue. The
+   * tabular backbone of "most recent activity per printer".
+   */
+  async printerActivity() {
+    return query(`
+      SELECT p.asset_number,
+             COALESCE(p.name, '—') AS name,
+             p.model,
+             COALESCE(d.name, 'Unassigned') AS department,
+             p.status,
+             count(t.id)::int AS total_issues,
+             count(t.id) FILTER (WHERE NOT ws.is_terminal)::int AS open_issues,
+             to_char(max(t.date_received), 'YYYY-MM-DD') AS last_logged,
+             round(avg(t.completion_date - t.date_received)
+                   FILTER (WHERE t.completion_date IS NOT NULL), 1) AS avg_days
+      FROM printers p
+      LEFT JOIN tickets t ON t.printer_id = p.id
+      LEFT JOIN workflow_stages ws ON ws.id = t.current_stage_id
+      LEFT JOIN departments d ON d.id = p.department_id
+      GROUP BY p.id, p.asset_number, p.name, p.model, d.name, p.status
+      ORDER BY total_issues DESC, p.asset_number
+    `);
+  },
+
+  /**
+   * Headline KPIs for the executive view: total workload, what is still open,
+   * how much has been resolved and how quickly, and how many printers the team
+   * has kept running. Used to justify ICT resourcing.
+   */
+  async executiveKpis() {
+    const row = await query<Record<string, unknown>>(`
+      SELECT
+        count(*)::int AS total_issues,
+        count(*) FILTER (WHERE NOT ws.is_terminal)::int AS open_issues,
+        count(*) FILTER (WHERE t.completion_date IS NOT NULL)::int AS resolved_issues,
+        count(*) FILTER (WHERE t.date_received >= date_trunc('month', CURRENT_DATE))::int
+                 AS issues_this_month,
+        count(*) FILTER (WHERE t.date_received >= CURRENT_DATE - INTERVAL '30 days')::int
+                 AS issues_last_30_days,
+        count(DISTINCT t.printer_id)::int AS printers_serviced,
+        round(avg(t.completion_date - t.date_received)
+              FILTER (WHERE t.completion_date IS NOT NULL), 1) AS avg_resolution_days
+      FROM tickets t JOIN workflow_stages ws ON ws.id = t.current_stage_id
+    `);
+    const printers = await query<Record<string, unknown>>(`
+      SELECT count(*) FILTER (WHERE status <> 'disposed')::int AS printers_managed,
+             count(*) FILTER (WHERE status = 'active')::int    AS printers_active,
+             count(*) FILTER (WHERE status = 'repair')::int    AS printers_in_repair
+      FROM printers
+    `);
+    return { ...row[0], ...printers[0] };
+  },
+
   async ownedVsLeased() {
     return query(`
       SELECT COALESCE(p.printer_type, 'unknown') AS type,
