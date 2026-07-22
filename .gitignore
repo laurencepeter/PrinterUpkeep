@@ -17,8 +17,15 @@ app/ios/
 app/linux/
 app/macos/
 app/windows/
-app/web/
 app/test/
+
+# Flutter web is scaffolded by `flutter create` at build time; only our brand
+# assets (printer favicon + PWA/launcher icons + manifest) are tracked.
+app/web/*
+!app/web/favicon.png
+!app/web/manifest.json
+!app/web/icons/
+!app/web/icons/*
 
 # IDE / OS
 .idea/

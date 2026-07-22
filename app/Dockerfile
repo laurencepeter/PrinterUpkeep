@@ -9,6 +9,16 @@ COPY pubspec.yaml analysis_options.yaml ./
 RUN flutter create . --platforms web --project-name printerupkeep \
     && flutter pub get
 
+# Brand assets: our printer favicon + PWA/launcher icons and manifest override
+# the placeholders `flutter create` generated above (COPY merges over them, so
+# the generated index.html/flutter_bootstrap.js stay intact). Also fix the
+# static tab title shown before the app boots.
+COPY web ./web
+RUN sed -i \
+      -e 's#<title>printerupkeep</title>#<title>ICT Printer Upkeep</title>#' \
+      -e 's#content="printerupkeep"#content="ICT Printer Upkeep"#' \
+      web/index.html || true
+
 # Build the app. Dependencies are already resolved above, so skip the redundant
 # resolution with --no-pub. -O2 lowers the dart2js optimization level from the
 # default (O4): this substantially cuts compile time and peak memory so the
