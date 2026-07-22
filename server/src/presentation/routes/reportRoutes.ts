@@ -16,6 +16,7 @@ const REPORTS: Record<string, { title: string; run: () => Promise<Row[]> }> = {
   'consumables-cost':       { title: 'Consumables Cost',         run: () => reportRepo.consumablesCost() as Promise<Row[]> },
   'common-issues':          { title: 'Most Common Issues',       run: () => reportRepo.commonIssues() as Promise<Row[]> },
   'most-repaired-printers': { title: 'Most Repaired Printers',   run: () => reportRepo.mostRepairedPrinters() as Promise<Row[]> },
+  'printer-activity':       { title: 'Printer Activity Log',     run: () => reportRepo.printerActivity() as Promise<Row[]> },
   'tickets-by-officer':     { title: 'Tickets by ICT Officer',   run: () => reportRepo.ticketsByOfficer() as Promise<Row[]> },
   'user-completion':        { title: 'User Completion Scores',   run: () => reportRepo.userCompletionScores() as Promise<Row[]> },
   'approvals-by-department':{ title: 'IT Approvals by Department', run: () => reportRepo.approvalsByDepartment() as Promise<Row[]> },
@@ -25,6 +26,30 @@ const REPORTS: Record<string, { title: string; run: () => Promise<Row[]> }> = {
 reportRoutes.get('/', (_req, res) => {
   res.json(Object.entries(REPORTS).map(([key, r]) => ({ key, title: r.title })));
 });
+
+// Consolidated executive summary: headline KPIs plus the supporting
+// breakdowns (workload per ICT officer, most active printers, monthly trend,
+// common issues) that justify ICT resourcing — assembled in one round-trip.
+reportRoutes.get(
+  '/executive/summary',
+  asyncHandler(async (_req, res) => {
+    const [kpis, byOfficer, topPrinters, monthly, byIssue] = await Promise.all([
+      reportRepo.executiveKpis(),
+      reportRepo.ticketsByOfficer(),
+      reportRepo.mostRepairedPrinters(10),
+      reportRepo.monthlyRepairs(12),
+      reportRepo.commonIssues(),
+    ]);
+    res.json({
+      generated_at: new Date().toISOString(),
+      kpis,
+      by_officer: byOfficer,
+      top_printers: topPrinters,
+      monthly,
+      by_issue: byIssue,
+    });
+  }),
+);
 
 // GET /api/reports/:key?format=json|csv|xlsx|pdf
 reportRoutes.get(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../core/api_client.dart';
 import '../providers/providers.dart';
 
@@ -42,6 +43,18 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
         ),
+        if (isAdmin) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.history),
+              title: const Text('Audit Log'),
+              subtitle: const Text('Who accessed the system and who changed or deleted records'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/audit-log'),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Card(
           child: Padding(

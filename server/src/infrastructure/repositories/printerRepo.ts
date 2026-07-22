@@ -1,10 +1,38 @@
 import { query, queryOne, withTransaction } from '../../db/pool';
 
+// Each printer is enriched with a lightweight activity summary: how many
+// issues (tickets) it has, how many are still open, and the single most recent
+// activity across those tickets (its latest stage change or, failing that, when
+// it was raised). This powers the "most recent activity per printer" view and
+// the per-printer issue counts without a second round-trip.
 const SELECT = `
-  SELECT p.*, d.name AS department_name, v.company_name AS vendor_name
+  SELECT p.*, d.name AS department_name, v.company_name AS vendor_name,
+         cnt.total_issues, cnt.open_issues,
+         act.last_ticket_id, act.last_ticket_number, act.last_status_label,
+         act.last_issue, act.last_activity
   FROM printers p
   LEFT JOIN departments d ON d.id = p.department_id
-  LEFT JOIN vendors v ON v.id = p.vendor_id`;
+  LEFT JOIN vendors v ON v.id = p.vendor_id
+  LEFT JOIN LATERAL (
+    SELECT count(*)::int AS total_issues,
+           count(*) FILTER (WHERE NOT ws.is_terminal)::int AS open_issues
+    FROM tickets t JOIN workflow_stages ws ON ws.id = t.current_stage_id
+    WHERE t.printer_id = p.id
+  ) cnt ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT t.id AS last_ticket_id, t.ticket_number AS last_ticket_number,
+           ws.status_label AS last_status_label, ic.name AS last_issue,
+           GREATEST(COALESCE(h.last_change, t.created_at), t.created_at) AS last_activity
+    FROM tickets t
+    JOIN workflow_stages ws ON ws.id = t.current_stage_id
+    LEFT JOIN issue_categories ic ON ic.id = t.issue_category_id
+    LEFT JOIN LATERAL (
+      SELECT max(created_at) AS last_change FROM ticket_stage_history WHERE ticket_id = t.id
+    ) h ON TRUE
+    WHERE t.printer_id = p.id
+    ORDER BY last_activity DESC
+    LIMIT 1
+  ) act ON TRUE`;
 
 export const printerRepo = {
   async list(opts: { search?: string; departmentId?: string; printerType?: string; status?: string } = {}) {
@@ -148,6 +176,24 @@ export const printerRepo = {
         keep(data.consumablesModel) !== undefined,
       ],
     );
+  },
+
+  /** Ticket numbers of every ticket ever raised against this printer. */
+  async linkedTicketNumbers(printerId: string): Promise<string[]> {
+    const rows = await query<{ ticket_number: string }>(
+      `SELECT ticket_number FROM tickets WHERE printer_id = $1 ORDER BY date_received DESC`,
+      [printerId],
+    );
+    return rows.map((r) => r.ticket_number);
+  },
+
+  /**
+   * Permanently delete a printer. Its consumables catalogue is cascade-removed
+   * and any tickets it was linked to are preserved with their printer link set
+   * to NULL (see migration 005), so maintenance history survives the deletion.
+   */
+  async remove(id: string): Promise<void> {
+    await query(`DELETE FROM printers WHERE id = $1`, [id]);
   },
 
   /** The consumables/parts catalogue an admin has defined for this printer. */

@@ -239,7 +239,14 @@ class Printer {
         purchaseDate = _s(json['purchase_date']),
         purchaseCost = _d(json['purchase_cost']),
         lastServiceDate = _s(json['last_service_date']),
-        nextServiceDue = _s(json['next_service_due']);
+        nextServiceDue = _s(json['next_service_due']),
+        totalIssues = _i(json['total_issues']),
+        openIssues = _i(json['open_issues']),
+        lastActivity = _s(json['last_activity']),
+        lastTicketId = _s(json['last_ticket_id']),
+        lastTicketNumber = _s(json['last_ticket_number']),
+        lastStatusLabel = _s(json['last_status_label']),
+        lastIssue = _s(json['last_issue']);
 
   final String id;
   final String assetNumber;
@@ -270,7 +277,24 @@ class Printer {
   final String? lastServiceDate;
   final String? nextServiceDue;
 
+  // Per-printer activity summary (see printerRepo.SELECT).
+  final int totalIssues;
+  final int openIssues;
+  final String? lastActivity;
+  final String? lastTicketId;
+  final String? lastTicketNumber;
+  final String? lastStatusLabel;
+  final String? lastIssue;
+
   bool get isLeased => printerType == 'leased';
+
+  /// Short human-readable summary of the most recent activity, e.g.
+  /// "2026-07-14 · Work In Progress" or "No issues logged".
+  String get lastActivitySummary {
+    if (lastActivity == null) return 'No issues logged';
+    final date = lastActivity!.length >= 10 ? lastActivity!.substring(0, 10) : lastActivity!;
+    return lastStatusLabel == null ? date : '$date · $lastStatusLabel';
+  }
 
   String get label =>
       name?.isNotEmpty == true ? '$assetNumber — $name ($model)' : '$assetNumber — $model';
@@ -395,6 +419,45 @@ class DashboardData {
   final List<ChartPoint> statusBreakdown;
 
   double? get avgCompletionDays => _d(stats['avg_completion_days']);
+}
+
+/// One row of the audit trail: who did what, to which entity, and when.
+class AuditLogEntry {
+  AuditLogEntry.fromJson(Map<String, dynamic> json)
+      : id = _i(json['id']),
+        entityType = json['entity_type'] ?? '',
+        entityId = _s(json['entity_id']) ?? '',
+        action = json['action'] ?? '',
+        field = _s(json['field']),
+        oldValue = _s(json['old_value']),
+        newValue = _s(json['new_value']),
+        userId = _s(json['user_id']),
+        userName = _s(json['user_name']),
+        createdAt = _s(json['created_at']) ?? '';
+
+  final int id;
+  final String entityType;
+  final String entityId;
+  final String action;
+  final String? field;
+  final String? oldValue;
+  final String? newValue;
+  final String? userId;
+  final String? userName;
+  final String createdAt;
+}
+
+class AuditLogPage {
+  AuditLogPage.fromJson(Map<String, dynamic> json)
+      : items = (json['items'] as List).map((e) => AuditLogEntry.fromJson(e)).toList(),
+        total = _i(json['total']),
+        page = _i(json['page']),
+        pageSize = _i(json['pageSize']);
+
+  final List<AuditLogEntry> items;
+  final int total;
+  final int page;
+  final int pageSize;
 }
 
 class AppNotification {

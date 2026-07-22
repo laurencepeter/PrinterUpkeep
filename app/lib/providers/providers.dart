@@ -139,6 +139,9 @@ class TicketFilters {
     this.vendorId,
     this.priority,
     this.printerType,
+    this.printerId,
+    this.printerLabel,
+    this.assignedTo,
     this.dateFrom,
     this.dateTo,
     this.openOnly = false,
@@ -151,6 +154,9 @@ class TicketFilters {
   final String? vendorId;
   final String? priority;
   final String? printerType;
+  final String? printerId;
+  final String? printerLabel; // display-only, for the active-filter chip
+  final String? assignedTo;
   final String? dateFrom;
   final String? dateTo;
   final bool openOnly;
@@ -163,6 +169,9 @@ class TicketFilters {
     String? Function()? vendorId,
     String? Function()? priority,
     String? Function()? printerType,
+    String? Function()? printerId,
+    String? Function()? printerLabel,
+    String? Function()? assignedTo,
     String? Function()? dateFrom,
     String? Function()? dateTo,
     bool? openOnly,
@@ -175,6 +184,9 @@ class TicketFilters {
         vendorId: vendorId != null ? vendorId() : this.vendorId,
         priority: priority != null ? priority() : this.priority,
         printerType: printerType != null ? printerType() : this.printerType,
+        printerId: printerId != null ? printerId() : this.printerId,
+        printerLabel: printerLabel != null ? printerLabel() : this.printerLabel,
+        assignedTo: assignedTo != null ? assignedTo() : this.assignedTo,
         dateFrom: dateFrom != null ? dateFrom() : this.dateFrom,
         dateTo: dateTo != null ? dateTo() : this.dateTo,
         openOnly: openOnly ?? this.openOnly,
@@ -188,6 +200,8 @@ class TicketFilters {
         if (vendorId != null) 'vendor_id': vendorId,
         if (priority != null) 'priority': priority,
         if (printerType != null) 'printer_type': printerType,
+        if (printerId != null) 'printer_id': printerId,
+        if (assignedTo != null) 'assigned_to': assignedTo,
         if (dateFrom != null) 'date_from': dateFrom,
         if (dateTo != null) 'date_to': dateTo,
         if (openOnly) 'open_only': 'true',
@@ -223,4 +237,45 @@ final notificationsProvider = FutureProvider<List<AppNotification>>((ref) async 
   ref.watch(authProvider);
   final data = await ref.read(apiProvider).get('/api/notifications', query: {'unread_only': 'true'});
   return (data as List).map((e) => AppNotification.fromJson(e)).toList();
+});
+
+// --- Audit log --------------------------------------------------------------
+
+/// Filters for the admin audit-log viewer.
+class AuditFilters {
+  const AuditFilters({this.entityType, this.action, this.page = 1});
+
+  final String? entityType;
+  final String? action; // filtered client-side; kept here for future use
+  final int page;
+
+  AuditFilters copyWith({String? Function()? entityType, String? Function()? action, int? page}) =>
+      AuditFilters(
+        entityType: entityType != null ? entityType() : this.entityType,
+        action: action != null ? action() : this.action,
+        page: page ?? this.page,
+      );
+}
+
+final auditFiltersProvider = StateProvider<AuditFilters>((ref) => const AuditFilters());
+
+// --- Executive summary ------------------------------------------------------
+
+/// Consolidated executive KPIs + supporting breakdowns for justifying ICT
+/// resourcing. Raw JSON from /api/reports/executive/summary.
+final executiveSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  ref.watch(authProvider);
+  final data = await ref.read(apiProvider).get('/api/reports/executive/summary');
+  return data as Map<String, dynamic>;
+});
+
+final auditLogProvider = FutureProvider<AuditLogPage>((ref) async {
+  ref.watch(authProvider);
+  final f = ref.watch(auditFiltersProvider);
+  final data = await ref.read(apiProvider).get('/api/audit-logs', query: {
+    if (f.entityType != null) 'entity_type': f.entityType,
+    'page': f.page,
+    'page_size': 50,
+  });
+  return AuditLogPage.fromJson(data);
 });

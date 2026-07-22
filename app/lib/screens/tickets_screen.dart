@@ -28,6 +28,9 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
     final auth = ref.watch(authProvider);
     final departments = ref.watch(departmentsProvider).valueOrNull ?? [];
     final vendors = ref.watch(vendorsProvider).valueOrNull ?? [];
+    final officers = (ref.watch(usersProvider).valueOrNull ?? [])
+        .where((u) => u.isActive && (u.role == 'admin' || u.role == 'ict_officer'))
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -71,6 +74,13 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              if (filters.printerId != null)
+                InputChip(
+                  avatar: const Icon(Icons.print, size: 16),
+                  label: Text('Printer: ${filters.printerLabel ?? filters.printerId}'),
+                  onDeleted: () => _update((f) => f.copyWith(
+                      printerId: () => null, printerLabel: () => null, page: 1)),
+                ),
               SizedBox(
                 width: 240,
                 child: TextField(
@@ -112,6 +122,16 @@ class _TicketsScreenState extends ConsumerState<TicketsScreen> {
                 label: (id) => vendors.firstWhere((v) => v.id == id).companyName,
                 onChanged: (v) => _update((f) => f.copyWith(vendorId: () => v, page: 1)),
               ),
+              if (officers.isNotEmpty)
+                _dropdown<String>(
+                  hint: 'ICT Officer',
+                  value: filters.assignedTo,
+                  items: officers.map((o) => o.id).toList(),
+                  label: (id) => officers
+                      .firstWhere((o) => o.id == id, orElse: () => officers.first)
+                      .fullName,
+                  onChanged: (v) => _update((f) => f.copyWith(assignedTo: () => v, page: 1)),
+                ),
               _dropdown<String>(
                 hint: 'Priority',
                 value: filters.priority,

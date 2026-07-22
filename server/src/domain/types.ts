@@ -15,7 +15,7 @@ export type ReportingMethod = 'walk_in' | 'phone' | 'email' | 'ict_ticket' | 've
 
 export type PrinterType = 'owned' | 'leased';
 
-export type PrinterStatus = 'active' | 'repair' | 'disposed';
+export type PrinterStatus = 'active' | 'inactive' | 'repair' | 'disposed';
 
 export type VendorType = 'printer' | 'consumables' | 'maintenance' | 'other';
 
