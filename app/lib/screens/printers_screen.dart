@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -49,6 +51,13 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                 selected: {_typeFilter},
                 onSelectionChanged: (s) => setState(() => _typeFilter = s.first),
               ),
+              const SizedBox(width: 8),
+              if (canWrite)
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Import'),
+                  onPressed: _importDialog,
+                ),
               const SizedBox(width: 8),
               if (canWrite)
                 FilledButton.icon(
@@ -137,6 +146,133 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
     );
   }
 
+  /// Bulk-import printers from a CSV / Excel / JSON file. Existing printers
+  /// (matching serial number, IP or asset number) are skipped server-side so a
+  /// re-import never creates duplicates.
+  Future<void> _importDialog() async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import Printers'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Upload a CSV, Excel (.xlsx) or JSON file. Recognised columns:'),
+              const SizedBox(height: 8),
+              Text(
+                'Department · IP Address · Model · Serial Number · Status · '
+                'Ownership Status · Toner Model · Waste Toner Model · Path',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              _bullet('Only Model is required. Unknown departments are created automatically.'),
+              _bullet('Toner Model may list several toners, one per line — e.g. '
+                  '"Yellow  W9052MC" then "Black  W9050MC" — each is imported and '
+                  'listed as its own colour + code.'),
+              _bullet('Printers that already exist (matching serial number, IP address '
+                  'or asset number) are skipped, so re-importing is safe.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton.icon(
+            icon: const Icon(Icons.folder_open),
+            label: const Text('Choose file…'),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+    if (proceed != true) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const ['csv', 'xlsx', 'json'],
+    );
+    final file = result?.files.firstOrNull;
+    if (file == null || file.bytes == null) return;
+
+    try {
+      final res = await ref.read(apiProvider).upload(
+            '/api/export/import/printers',
+            MultipartFile.fromBytes(file.bytes!, filename: file.name),
+          );
+      ref.invalidate(printersProvider);
+      if (!mounted) return;
+      _showImportResult(res as Map<String, dynamic>);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+      }
+    }
+  }
+
+  void _showImportResult(Map<String, dynamic> res) {
+    final imported = res['imported'] ?? 0;
+    final skipped = (res['skipped_duplicates'] as List?) ?? const [];
+    final errors = (res['errors'] as List?) ?? const [];
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import complete'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 20),
+                  const SizedBox(width: 8),
+                  Text('$imported printer(s) imported',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ]),
+                if (skipped.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('${skipped.length} skipped (already exist):',
+                      style: Theme.of(context).textTheme.titleSmall),
+                  for (final s in skipped.take(25))
+                    Text('• $s', style: Theme.of(context).textTheme.bodySmall),
+                  if (skipped.length > 25)
+                    Text('…and ${skipped.length - 25} more',
+                        style: Theme.of(context).textTheme.bodySmall),
+                ],
+                if (errors.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('${errors.length} row error(s):',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(color: Theme.of(context).colorScheme.error)),
+                  for (final s in errors.take(25))
+                    Text('• $s', style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _bullet(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('•  '),
+          Expanded(child: Text(text)),
+        ]),
+      );
+
   /// Lease period cell, highlighted red when the lease has ≤30 days left.
   Widget _leaseCell(BuildContext context, Printer p) {
     final period = p.leasePeriod;
@@ -156,7 +292,10 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
 
   Future<void> _detailsDialog(Printer p) async {
     final history = await ref.read(apiProvider).get('/api/printers/${p.id}/history');
+    final consumables = await ref.read(apiProvider).get('/api/printers/${p.id}/consumables');
     if (!mounted) return;
+    final items =
+        (consumables as List).map((e) => PrinterConsumable.fromJson(e as Map<String, dynamic>)).toList();
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -188,6 +327,21 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                 _kv('Vendor', p.vendorName ?? '—'),
                 _kv('Building/Floor', '${p.building ?? '—'} / ${p.floor ?? '—'}'),
               ]),
+              const Divider(height: 24),
+              Text('Toners & Consumables', style: Theme.of(context).textTheme.titleSmall),
+              if (items.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text('No toners/consumables defined'),
+                ),
+              for (final c in items)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.water_drop_outlined, size: 18),
+                  title: Text(c.fullLabel),
+                  subtitle: Text(PrinterConsumable.titleCase(c.kind)),
+                ),
               const Divider(height: 24),
               Text('Maintenance History', style: Theme.of(context).textTheme.titleSmall),
               if ((history as List).isEmpty)
