@@ -224,3 +224,34 @@ final notificationsProvider = FutureProvider<List<AppNotification>>((ref) async 
   final data = await ref.read(apiProvider).get('/api/notifications', query: {'unread_only': 'true'});
   return (data as List).map((e) => AppNotification.fromJson(e)).toList();
 });
+
+// --- Audit log --------------------------------------------------------------
+
+/// Filters for the admin audit-log viewer.
+class AuditFilters {
+  const AuditFilters({this.entityType, this.action, this.page = 1});
+
+  final String? entityType;
+  final String? action; // filtered client-side; kept here for future use
+  final int page;
+
+  AuditFilters copyWith({String? Function()? entityType, String? Function()? action, int? page}) =>
+      AuditFilters(
+        entityType: entityType != null ? entityType() : this.entityType,
+        action: action != null ? action() : this.action,
+        page: page ?? this.page,
+      );
+}
+
+final auditFiltersProvider = StateProvider<AuditFilters>((ref) => const AuditFilters());
+
+final auditLogProvider = FutureProvider<AuditLogPage>((ref) async {
+  ref.watch(authProvider);
+  final f = ref.watch(auditFiltersProvider);
+  final data = await ref.read(apiProvider).get('/api/audit-logs', query: {
+    if (f.entityType != null) 'entity_type': f.entityType,
+    'page': f.page,
+    'page_size': 50,
+  });
+  return AuditLogPage.fromJson(data);
+});

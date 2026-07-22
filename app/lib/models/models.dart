@@ -397,6 +397,45 @@ class DashboardData {
   double? get avgCompletionDays => _d(stats['avg_completion_days']);
 }
 
+/// One row of the audit trail: who did what, to which entity, and when.
+class AuditLogEntry {
+  AuditLogEntry.fromJson(Map<String, dynamic> json)
+      : id = _i(json['id']),
+        entityType = json['entity_type'] ?? '',
+        entityId = _s(json['entity_id']) ?? '',
+        action = json['action'] ?? '',
+        field = _s(json['field']),
+        oldValue = _s(json['old_value']),
+        newValue = _s(json['new_value']),
+        userId = _s(json['user_id']),
+        userName = _s(json['user_name']),
+        createdAt = _s(json['created_at']) ?? '';
+
+  final int id;
+  final String entityType;
+  final String entityId;
+  final String action;
+  final String? field;
+  final String? oldValue;
+  final String? newValue;
+  final String? userId;
+  final String? userName;
+  final String createdAt;
+}
+
+class AuditLogPage {
+  AuditLogPage.fromJson(Map<String, dynamic> json)
+      : items = (json['items'] as List).map((e) => AuditLogEntry.fromJson(e)).toList(),
+        total = _i(json['total']),
+        page = _i(json['page']),
+        pageSize = _i(json['pageSize']);
+
+  final List<AuditLogEntry> items;
+  final int total;
+  final int page;
+  final int pageSize;
+}
+
 class AppNotification {
   AppNotification.fromJson(Map<String, dynamic> json)
       : id = _i(json['id']),

@@ -150,6 +150,24 @@ export const printerRepo = {
     );
   },
 
+  /** Ticket numbers of every ticket ever raised against this printer. */
+  async linkedTicketNumbers(printerId: string): Promise<string[]> {
+    const rows = await query<{ ticket_number: string }>(
+      `SELECT ticket_number FROM tickets WHERE printer_id = $1 ORDER BY date_received DESC`,
+      [printerId],
+    );
+    return rows.map((r) => r.ticket_number);
+  },
+
+  /**
+   * Permanently delete a printer. Its consumables catalogue is cascade-removed
+   * and any tickets it was linked to are preserved with their printer link set
+   * to NULL (see migration 005), so maintenance history survives the deletion.
+   */
+  async remove(id: string): Promise<void> {
+    await query(`DELETE FROM printers WHERE id = $1`, [id]);
+  },
+
   /** The consumables/parts catalogue an admin has defined for this printer. */
   async consumables(printerId: string) {
     return query(

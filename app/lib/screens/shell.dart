@@ -11,7 +11,7 @@ class AppShell extends ConsumerWidget {
 
   final Widget child;
 
-  static const _destinations = [
+  static const _baseDestinations = [
     (route: '/dashboard', icon: Icons.dashboard_outlined, label: 'Dashboard'),
     (route: '/tickets', icon: Icons.confirmation_number_outlined, label: 'Tickets'),
     (route: '/printers', icon: Icons.print_outlined, label: 'Printers'),
@@ -19,26 +19,36 @@ class AppShell extends ConsumerWidget {
     (route: '/departments', icon: Icons.apartment_outlined, label: 'Departments'),
     (route: '/reports', icon: Icons.bar_chart_outlined, label: 'Reports'),
     (route: '/users', icon: Icons.group_outlined, label: 'Users'),
-    (route: '/settings', icon: Icons.settings_outlined, label: 'Settings'),
   ];
+
+  static const _adminDestination =
+      (route: '/audit-log', icon: Icons.history, label: 'Audit Log');
+  static const _settingsDestination =
+      (route: '/settings', icon: Icons.settings_outlined, label: 'Settings');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).uri.path;
-    final selected = _destinations.indexWhere((d) => location.startsWith(d.route));
     final auth = ref.watch(authProvider);
+    // Audit Log is administrator-only; Settings is always last.
+    final destinations = [
+      ..._baseDestinations,
+      if (auth.user?.isAdmin == true) _adminDestination,
+      _settingsDestination,
+    ];
+    final selected = destinations.indexWhere((d) => location.startsWith(d.route));
     final notifications = ref.watch(notificationsProvider).valueOrNull ?? [];
     final wide = MediaQuery.sizeOf(context).width >= 900;
 
     final rail = NavigationRail(
       selectedIndex: selected < 0 ? 0 : selected,
-      onDestinationSelected: (i) => context.go(_destinations[i].route),
+      onDestinationSelected: (i) => context.go(destinations[i].route),
       extended: MediaQuery.sizeOf(context).width >= 1200,
       labelType: MediaQuery.sizeOf(context).width >= 1200
           ? NavigationRailLabelType.none
           : NavigationRailLabelType.all,
       destinations: [
-        for (final d in _destinations)
+        for (final d in destinations)
           NavigationRailDestination(icon: Icon(d.icon), label: Text(d.label)),
       ],
     );
@@ -96,7 +106,7 @@ class AppShell extends ConsumerWidget {
           : Drawer(
               child: ListView(
                 children: [
-                  for (final d in _destinations)
+                  for (final d in destinations)
                     ListTile(
                       leading: Icon(d.icon),
                       title: Text(d.label),

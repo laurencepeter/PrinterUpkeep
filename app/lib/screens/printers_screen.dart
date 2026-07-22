@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../core/api_client.dart';
+import '../core/theme.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../widgets/ip_address_link.dart';
 
 class PrintersScreen extends ConsumerStatefulWidget {
   const PrintersScreen({super.key});
@@ -21,17 +23,26 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
   @override
   Widget build(BuildContext context) {
     final printers = ref.watch(printersProvider);
-    final canWrite = ref.watch(authProvider).user?.canWrite == true;
+    final auth = ref.watch(authProvider);
+    final canWrite = auth.user?.canWrite == true;
+    final isAdmin = auth.user?.isAdmin == true;
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // Header controls wrap onto extra lines on narrow screens so nothing
+          // ever overflows — no more zooming out to reach the buttons.
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Text('Printers', style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text('Printers', style: Theme.of(context).textTheme.headlineSmall),
+              ),
               SizedBox(
                 width: 230,
                 child: TextField(
@@ -41,7 +52,6 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                   onChanged: (v) => setState(() => _search = v.toLowerCase()),
                 ),
               ),
-              const SizedBox(width: 8),
               SegmentedButton<String?>(
                 segments: const [
                   ButtonSegment(value: null, label: Text('All')),
@@ -51,14 +61,12 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                 selected: {_typeFilter},
                 onSelectionChanged: (s) => setState(() => _typeFilter = s.first),
               ),
-              const SizedBox(width: 8),
               if (canWrite)
                 OutlinedButton.icon(
                   icon: const Icon(Icons.upload_file),
                   label: const Text('Import'),
                   onPressed: _importDialog,
                 ),
-              const SizedBox(width: 8),
               if (canWrite)
                 FilledButton.icon(
                   icon: const Icon(Icons.add),
@@ -84,59 +92,20 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                   return matchesSearch && matchesType;
                 }).toList();
                 if (filtered.isEmpty) return const Center(child: Text('No printers'));
-                return Card(
-                  child: SingleChildScrollView(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        showCheckboxColumn: false,
-                        columns: const [
-                          DataColumn(label: Text('Asset #')),
-                          DataColumn(label: Text('Name')),
-                          DataColumn(label: Text('Model')),
-                          DataColumn(label: Text('IP Address')),
-                          DataColumn(label: Text('Type')),
-                          DataColumn(label: Text('Lease Period')),
-                          DataColumn(label: Text('Department')),
-                          DataColumn(label: Text('Location')),
-                          DataColumn(label: Text('Next Service')),
-                          DataColumn(label: Text('Status')),
-                          DataColumn(label: Text('Actions')),
-                        ],
-                        rows: [
-                          for (final p in filtered)
-                            DataRow(cells: [
-                              DataCell(Text(p.assetNumber,
-                                  style: const TextStyle(fontWeight: FontWeight.w600))),
-                              DataCell(Text(p.name ?? '—')),
-                              DataCell(Text(p.model)),
-                              DataCell(Text(p.ipAddress ?? '—')),
-                              DataCell(Chip(
-                                label: Text(p.printerType.toUpperCase(),
-                                    style: const TextStyle(fontSize: 10)),
-                                visualDensity: VisualDensity.compact,
-                              )),
-                              DataCell(_leaseCell(context, p)),
-                              DataCell(Text(p.departmentName ?? '—')),
-                              DataCell(Text(p.location ?? '—')),
-                              DataCell(Text(p.nextServiceDue?.substring(0, 10) ?? '—')),
-                              DataCell(Text(p.status)),
-                              DataCell(Row(children: [
-                                IconButton(
-                                  tooltip: 'Details & maintenance history',
-                                  icon: const Icon(Icons.info_outline, size: 18),
-                                  onPressed: () => _detailsDialog(p),
-                                ),
-                                if (canWrite)
-                                  IconButton(
-                                      icon: const Icon(Icons.edit, size: 18),
-                                      onPressed: () => _editDialog(p)),
-                              ])),
-                            ]),
-                        ],
-                      ),
-                    ),
-                  ),
+                // Table on wide screens; stacked cards on phones/tablets so the
+                // content fits the viewport and scrolls vertically.
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 820;
+                    return AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: wide
+                          ? _table(filtered, canWrite, isAdmin)
+                          : _cardList(filtered, canWrite, isAdmin),
+                    );
+                  },
                 );
               },
             ),
@@ -144,6 +113,237 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
         ],
       ),
     );
+  }
+
+  /// Wide-screen data table. Wrapped in both scroll axes so long lists scroll
+  /// vertically and wide rows scroll horizontally without clipping.
+  Widget _table(List<Printer> filtered, bool canWrite, bool isAdmin) {
+    return Card(
+      key: const ValueKey('printers-table'),
+      child: SingleChildScrollView(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            showCheckboxColumn: false,
+            columns: const [
+              DataColumn(label: Text('Asset #')),
+              DataColumn(label: Text('Name')),
+              DataColumn(label: Text('Model')),
+              DataColumn(label: Text('IP Address')),
+              DataColumn(label: Text('Type')),
+              DataColumn(label: Text('Lease Period')),
+              DataColumn(label: Text('Department')),
+              DataColumn(label: Text('Location')),
+              DataColumn(label: Text('Next Service')),
+              DataColumn(label: Text('Status')),
+              DataColumn(label: Text('Actions')),
+            ],
+            rows: [
+              for (final p in filtered)
+                DataRow(cells: [
+                  DataCell(Text(p.assetNumber,
+                      style: const TextStyle(fontWeight: FontWeight.w600))),
+                  DataCell(Text(p.name ?? '—')),
+                  DataCell(Text(p.model)),
+                  DataCell(IpAddressLink(p.ipAddress)),
+                  DataCell(Chip(
+                    label: Text(p.printerType.toUpperCase(),
+                        style: const TextStyle(fontSize: 10)),
+                    visualDensity: VisualDensity.compact,
+                  )),
+                  DataCell(_leaseCell(context, p)),
+                  DataCell(Text(p.departmentName ?? '—')),
+                  DataCell(Text(p.location ?? '—')),
+                  DataCell(Text(p.nextServiceDue?.substring(0, 10) ?? '—')),
+                  DataCell(StatusBadge(p.status, dense: true)),
+                  DataCell(Row(mainAxisSize: MainAxisSize.min, children: _rowActions(p, canWrite, isAdmin))),
+                ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Narrow-screen (phone / tablet) layout: one card per printer.
+  Widget _cardList(List<Printer> filtered, bool canWrite, bool isAdmin) {
+    return ListView.separated(
+      key: const ValueKey('printers-cards'),
+      padding: const EdgeInsets.only(bottom: 24),
+      itemCount: filtered.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => _printerCard(filtered[i], canWrite, isAdmin),
+    );
+  }
+
+  Widget _printerCard(Printer p, bool canWrite, bool isAdmin) {
+    final muted = Theme.of(context).textTheme.bodySmall;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(p.assetNumber,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                      if (p.name?.isNotEmpty == true)
+                        Text(p.name!, style: muted),
+                    ],
+                  ),
+                ),
+                StatusBadge(p.status),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(p.model),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.lan_outlined, size: 14, color: muted?.color),
+                  const SizedBox(width: 4),
+                  IpAddressLink(p.ipAddress),
+                ]),
+                if (p.departmentName != null)
+                  Text('${p.departmentName}', style: muted),
+                if (p.location != null) Text('${p.location}', style: muted),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Wrap(spacing: 16, runSpacing: 4, children: [
+              Text('Type: ${p.printerType.toUpperCase()}', style: muted),
+              if (p.nextServiceDue != null)
+                Text('Next service: ${p.nextServiceDue!.substring(0, 10)}', style: muted),
+            ]),
+            const SizedBox(height: 4),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: _rowActions(p, canWrite, isAdmin)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shared row/card actions: details, edit, and (admins) quick status changes
+  /// and delete.
+  List<Widget> _rowActions(Printer p, bool canWrite, bool isAdmin) => [
+        IconButton(
+          tooltip: 'Details & maintenance history',
+          icon: const Icon(Icons.info_outline, size: 20),
+          onPressed: () => _detailsDialog(p),
+        ),
+        if (canWrite)
+          IconButton(
+            tooltip: 'Edit',
+            icon: const Icon(Icons.edit, size: 20),
+            onPressed: () => _editDialog(p),
+          ),
+        if (isAdmin)
+          PopupMenuButton<String>(
+            tooltip: 'Administrator actions',
+            icon: const Icon(Icons.more_vert, size: 20),
+            onSelected: (v) => v == 'delete' ? _confirmDelete(p) : _setStatus(p, v),
+            itemBuilder: (context) => [
+              if (p.status != 'active')
+                _statusMenuItem('active', 'Set active'),
+              if (p.status != 'inactive' && p.status != 'disposed')
+                _statusMenuItem('inactive', 'Set inactive'),
+              if (p.status != 'repair')
+                _statusMenuItem('repair', 'Mark in repair'),
+              if (p.status != 'disposed')
+                _statusMenuItem('disposed', 'Mark disposed'),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.delete_forever,
+                      color: Theme.of(context).colorScheme.error),
+                  title: Text('Delete printer',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ),
+              ),
+            ],
+          ),
+      ];
+
+  PopupMenuItem<String> _statusMenuItem(String status, String label) => PopupMenuItem(
+        value: status,
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(PrinterStatusColors.icon(status),
+              color: PrinterStatusColors.color(status, Theme.of(context).brightness)),
+          title: Text(label),
+        ),
+      );
+
+  /// Quick status change (admin) — used for the Set active/inactive/repair/
+  /// disposed shortcuts. Goes through the normal PATCH so it is audit-logged.
+  Future<void> _setStatus(Printer p, String status) async {
+    try {
+      await ref.read(apiProvider).patch('/api/printers/${p.id}', body: {'status': status});
+      ref.invalidate(printersProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${p.assetNumber} set to ${PrinterStatusColors.label(status)}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+      }
+    }
+  }
+
+  /// Permanently delete a printer (admin only). Confirmation makes clear the
+  /// history is preserved and the deletion is audited.
+  Future<void> _confirmDelete(Printer p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(Icons.warning_amber_rounded,
+            color: Theme.of(context).colorScheme.error, size: 32),
+        title: const Text('Delete printer?'),
+        content: Text(
+          'This permanently removes ${p.label}.\n\n'
+          'Any maintenance tickets already linked to it are kept for history, '
+          'and the deletion is recorded in the audit log. If you only want it out '
+          'of service, set it Inactive or Disposed instead.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(apiProvider).delete('/api/printers/${p.id}');
+      ref.invalidate(printersProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${p.assetNumber} deleted')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+      }
+    }
   }
 
   /// Bulk-import printers from a CSV / Excel / JSON file. Existing printers
@@ -307,12 +507,13 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
             children: [
               Wrap(spacing: 24, runSpacing: 10, children: [
                 _kv('Serial', p.serialNumber ?? '—'),
-                _kv('IP Address', p.ipAddress ?? '—'),
+                _kvChild('IP Address', IpAddressLink(p.ipAddress)),
                 _kv('MAC Address', p.macAddress ?? '—'),
                 _kv('Connection', p.connectionType),
                 _kv('Colour', p.isColor ? 'Colour' : 'Mono'),
                 _kv('Consumables', p.consumablesModel ?? '—'),
                 _kv('Type', p.printerType.toUpperCase()),
+                _kvChild('Status', StatusBadge(p.status, dense: true)),
                 if (p.isLeased) _kv('Lease Period', p.leasePeriod ?? '—'),
                 if (p.isLeased)
                   _kv('Monthly Cost',
@@ -365,13 +566,15 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
     );
   }
 
-  Widget _kv(String k, String v) => SizedBox(
+  Widget _kv(String k, String v) => _kvChild(k, Text(v));
+
+  Widget _kvChild(String k, Widget child) => SizedBox(
         width: 160,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(k, style: Theme.of(context).textTheme.labelSmall),
-            Text(v),
+            Align(alignment: Alignment.centerLeft, child: child),
           ],
         ),
       );
@@ -676,6 +879,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                     decoration: const InputDecoration(labelText: 'Status'),
                     items: const [
                       DropdownMenuItem(value: 'active', child: Text('Active')),
+                      DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
                       DropdownMenuItem(value: 'repair', child: Text('In Repair')),
                       DropdownMenuItem(value: 'disposed', child: Text('Disposed')),
                     ],

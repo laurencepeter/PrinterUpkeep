@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/theme.dart';
 import 'providers/providers.dart';
+import 'screens/audit_log_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/departments_screen.dart';
 import 'screens/login_screen.dart';
@@ -53,6 +54,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
           GoRoute(path: '/users', builder: (context, state) => const UsersScreen()),
           GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+          GoRoute(path: '/audit-log', builder: (context, state) => const AuditLogScreen()),
         ],
       ),
     ],

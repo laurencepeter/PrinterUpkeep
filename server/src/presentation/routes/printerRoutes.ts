@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler, requireAuth, writeAccess } from '../middleware';
+import { adminOnly, asyncHandler, requireAuth, writeAccess } from '../middleware';
 import { printerRepo } from '../../infrastructure/repositories/printerRepo';
 import { auditRepo } from '../../infrastructure/repositories/auditRepo';
 import { NotFoundError } from '../../domain/errors';
@@ -39,7 +39,7 @@ const printerBase = z
     purchaseCost: z.number().nonnegative().nullable().optional(),
     lastServiceDate: dateStr.nullable().optional(),
     nextServiceDue: dateStr.nullable().optional(),
-    status: z.enum(['active', 'repair', 'disposed']).optional(),
+    status: z.enum(['active', 'inactive', 'repair', 'disposed']).optional(),
     notes: z.string().optional(),
   });
 
@@ -141,5 +141,42 @@ printerRoutes.patch(
     const printer = await printerRepo.update(req.params.id, data);
     await auditRepo.logDiff('printer', req.params.id, req.user!.id, before, printer as Record<string, unknown>);
     res.json(printer);
+  }),
+);
+
+// Hard-delete a printer (system administrators only). Deleting is rarely
+// necessary — setting a printer 'inactive' or 'disposed' keeps its record —
+// so before the row is removed we snapshot the printer and every ticket it was
+// linked to into the audit log, giving a permanent record of what existed and
+// what it was connected to.
+printerRoutes.delete(
+  '/:id',
+  adminOnly,
+  asyncHandler(async (req, res) => {
+    const printer = (await printerRepo.byId(req.params.id)) as Record<string, unknown> | null;
+    if (!printer) throw new NotFoundError('Printer');
+    const linkedTickets = await printerRepo.linkedTicketNumbers(req.params.id);
+
+    await auditRepo.log({
+      entityType: 'printer',
+      entityId: req.params.id,
+      action: 'delete',
+      field: 'printer',
+      oldValue: {
+        asset_number: printer.asset_number,
+        name: printer.name,
+        model: printer.model,
+        serial_number: printer.serial_number,
+        ip_address: printer.ip_address,
+        status: printer.status,
+        department_name: printer.department_name,
+        linked_tickets: linkedTickets,
+      },
+      newValue: `deleted (${linkedTickets.length} linked ticket(s) preserved)`,
+      userId: req.user!.id,
+    });
+
+    await printerRepo.remove(req.params.id);
+    res.json({ ok: true, deletedTickets: 0, unlinkedTickets: linkedTickets.length });
   }),
 );
