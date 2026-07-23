@@ -46,5 +46,5 @@ INSERT INTO settings (key, value, description) VALUES
     ('requisition_prefix',  'REQ',  'Prefix for auto-generated requisition numbers'),
     ('overdue_days',        '7',    'Days without a stage change before a ticket is flagged overdue'),
     ('vendor_delay_days',   '5',    'Days waiting on a vendor before flagging a vendor delay'),
-    ('default_currency',    'USD',  'Default currency for quotation amounts')
+    ('default_currency',    'TTD',  'Default currency for quotation amounts')
 ON CONFLICT (key) DO NOTHING;

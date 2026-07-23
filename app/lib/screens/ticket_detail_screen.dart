@@ -501,7 +501,7 @@ class _TicketDetailView extends ConsumerWidget {
                 const SizedBox(height: 10),
                 TextField(
                   controller: amount,
-                  decoration: const InputDecoration(labelText: 'Amount'),
+                  decoration: const InputDecoration(labelText: 'Amount', prefixText: 'TTD '),
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 10),

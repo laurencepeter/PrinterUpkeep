@@ -143,7 +143,10 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
             ],
             rows: [
               for (final p in filtered)
-                DataRow(cells: [
+                DataRow(
+                  // Selecting the row opens the printer's full record and log.
+                  onSelectChanged: (_) => _detailsDialog(p),
+                  cells: [
                   DataCell(Text(p.assetNumber,
                       style: const TextStyle(fontWeight: FontWeight.w600))),
                   DataCell(Text(p.name ?? '—')),
@@ -160,7 +163,7 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
                   DataCell(Text(p.nextServiceDue?.substring(0, 10) ?? '—')),
                   DataCell(PrinterStatusBadge(p.status, dense: true)),
                   DataCell(_issuesCell(p)),
-                  DataCell(Text(p.lastActivitySummary)),
+                  DataCell(_lastActivityCell(p)),
                   DataCell(Row(mainAxisSize: MainAxisSize.min, children: _rowActions(p, canWrite, isAdmin))),
                 ]),
             ],
@@ -234,7 +237,23 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
             Row(children: [
               Icon(Icons.history, size: 14, color: muted?.color),
               const SizedBox(width: 4),
-              Expanded(child: Text('Last activity: ${p.lastActivitySummary}', style: muted)),
+              Expanded(
+                child: p.lastTicketId == null
+                    ? Text('Last activity: ${p.lastActivitySummary}', style: muted)
+                    : Tooltip(
+                        message: _lastTicketTooltip(p),
+                        child: InkWell(
+                          onTap: () => context.go('/tickets/${p.lastTicketId}'),
+                          child: Text(
+                            'Last activity: ${p.lastActivitySummary}',
+                            style: muted?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
               if (p.totalIssues > 0)
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
@@ -324,6 +343,48 @@ class _PrintersScreenState extends ConsumerState<PrintersScreen> {
       style: TextStyle(
         color: hasOpen ? const Color(0xFFEF6C00) : null,
         fontWeight: hasOpen ? FontWeight.w600 : null,
+      ),
+    );
+  }
+
+  /// Tooltip body shown on hover: the last ticket for this printer at a glance.
+  String _lastTicketTooltip(Printer p) {
+    final date = p.lastActivity != null && p.lastActivity!.length >= 10
+        ? p.lastActivity!.substring(0, 10)
+        : (p.lastActivity ?? '—');
+    return [
+      'Last ticket: ${p.lastTicketNumber}',
+      'Issue: ${p.lastIssue ?? '—'}',
+      'Status: ${p.lastStatusLabel ?? '—'}',
+      'Logged: $date',
+      'Tap to open this ticket',
+    ].join('\n');
+  }
+
+  /// Last-activity cell: hover to preview the last ticket, tap to open it.
+  Widget _lastActivityCell(Printer p) {
+    if (p.lastTicketNumber == null) {
+      return Text(p.lastActivitySummary,
+          style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color));
+    }
+    final primary = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: _lastTicketTooltip(p),
+      waitDuration: const Duration(milliseconds: 300),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: p.lastTicketId == null ? null : () => context.go('/tickets/${p.lastTicketId}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.receipt_long, size: 15, color: primary),
+              const SizedBox(width: 4),
+              Text(p.lastActivitySummary),
+            ],
+          ),
+        ),
       ),
     );
   }
