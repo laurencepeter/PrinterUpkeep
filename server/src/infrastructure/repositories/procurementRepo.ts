@@ -1,9 +1,16 @@
 import { queryOne, withTransaction } from '../../db/pool';
 import { ticketRepo } from './ticketRepo';
+import { settingsRepo } from './lookupRepo';
 
 /** Quotations, requisitions, approvals (Accounts/GA), POs and delivery notes. */
 export const procurementRepo = {
   async upsertQuotation(ticketId: string, data: Record<string, unknown>) {
+    // New quotations take the organisation's configured currency (TTD) unless
+    // one is explicitly supplied, so amounts are never mislabelled.
+    const currency =
+      (data.currency as string | undefined) ??
+      (await settingsRepo.get('default_currency')) ??
+      'TTD';
     if (data.id) {
       return queryOne(
         `UPDATE quotations SET
@@ -28,11 +35,11 @@ export const procurementRepo = {
     return queryOne(
       `INSERT INTO quotations (ticket_id, vendor_id, vendor_contact_date, requested_date,
                                received_date, quotation_number, amount, currency, file_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'USD'), $9, $10) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         ticketId, data.vendorId ?? null, data.vendorContactDate ?? null, data.requestedDate ?? null,
         data.receivedDate ?? null, data.quotationNumber ?? null, data.amount ?? null,
-        data.currency ?? null, data.fileId ?? null, data.notes ?? null,
+        currency, data.fileId ?? null, data.notes ?? null,
       ],
     );
   },

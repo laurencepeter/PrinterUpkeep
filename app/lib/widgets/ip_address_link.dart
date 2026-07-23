@@ -49,7 +49,13 @@ class IpAddressLink extends StatelessWidget {
     final uri = Uri.parse('http://$ip');
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      // On the web build, open the printer's page in a NEW browser tab so the
+      // dashboard stays put; `_blank` is honoured on web and ignored elsewhere.
+      final ok = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
       if (!ok) {
         messenger.showSnackBar(SnackBar(content: Text('Could not open $uri')));
       }
