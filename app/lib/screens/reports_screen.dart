@@ -63,6 +63,29 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 children: [
                   Text('Reports', style: Theme.of(context).textTheme.headlineSmall),
                   const Spacer(),
+                  // One-click pack of every report (a styled workbook or charted
+                  // PDF assembled server-side).
+                  MenuAnchor(
+                    builder: (context, controller, _) => OutlinedButton.icon(
+                      icon: const Icon(Icons.library_books_outlined),
+                      label: const Text('Export all'),
+                      onPressed: () =>
+                          controller.isOpen ? controller.close() : controller.open(),
+                    ),
+                    menuChildren: [
+                      for (final f in ['xlsx', 'pdf'])
+                        MenuItemButton(
+                          leadingIcon: Icon(
+                              f == 'xlsx' ? Icons.table_chart_outlined : Icons.picture_as_pdf_outlined,
+                              size: 18),
+                          child: Text('All reports · ${f.toUpperCase()}'),
+                          onPressed: () => launchUrlString(ref
+                              .read(apiProvider)
+                              .downloadUrl('/api/reports/all?format=$f')),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
                   if (_selected != null)
                     MenuAnchor(
                       builder: (context, controller, _) => FilledButton.tonalIcon(

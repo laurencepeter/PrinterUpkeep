@@ -1,6 +1,15 @@
+import { PoolClient } from 'pg';
 import { queryOne, withTransaction } from '../../db/pool';
 import { ticketRepo } from './ticketRepo';
 import { settingsRepo } from './lookupRepo';
+
+/** One priced line on a requisition form. */
+export interface ItemInput {
+  quantity?: number;
+  unit?: string | null;
+  description: string;
+  unitPrice?: number;
+}
 
 /** Quotations, requisitions, approvals (Accounts/GA), POs and delivery notes. */
 export const procurementRepo = {
@@ -49,24 +58,87 @@ export const procurementRepo = {
     return withTransaction(async (client) => {
       const reqNumber = await ticketRepo.nextNumber(client, prefix, 4);
       const result = await client.query(
-        `INSERT INTO requisitions (ticket_id, requisition_number, prepared_date, signed_file_id, notes)
-         VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5) RETURNING *`,
-        [ticketId, reqNumber, data.preparedDate ?? null, data.signedFileId ?? null, data.notes ?? null],
+        `INSERT INTO requisitions
+           (ticket_id, requisition_number, prepared_date, signed_file_id, notes,
+            requested_by, department_name, file_number, supply_priority, memorandum,
+            prepared_by, vat_rate, expense_code, annual_budget, expenditure_to_date,
+            amount_available, authorised_manager, accounting_officer)
+         VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5,
+                 $6, $7, $8, $9, $10,
+                 $11, COALESCE($12, 12.5), $13, $14, $15,
+                 $16, $17, $18) RETURNING *`,
+        [
+          ticketId, reqNumber, data.preparedDate ?? null, data.signedFileId ?? null, data.notes ?? null,
+          data.requestedBy ?? null, data.departmentName ?? null, data.fileNumber ?? null,
+          data.supplyPriority ?? null, data.memorandum ?? null,
+          data.preparedBy ?? null, data.vatRate ?? null, data.expenseCode ?? null,
+          data.annualBudget ?? null, data.expenditureToDate ?? null, data.amountAvailable ?? null,
+          data.authorisedManager ?? null, data.accountingOfficer ?? null,
+        ],
       );
-      return result.rows[0];
+      const requisition = result.rows[0];
+      if (Array.isArray(data.items)) {
+        await this.replaceRequisitionItems(client, requisition.id as string, data.items as ItemInput[]);
+      }
+      return requisition;
     });
   },
 
   async updateRequisition(id: string, ticketId: string, data: Record<string, unknown>) {
-    return queryOne(
-      `UPDATE requisitions SET
-         prepared_date  = COALESCE($3, prepared_date),
-         signed_file_id = COALESCE($4, signed_file_id),
-         notes          = COALESCE($5, notes),
-         updated_at     = now()
-       WHERE id = $1 AND ticket_id = $2 RETURNING *`,
-      [id, ticketId, data.preparedDate ?? null, data.signedFileId ?? null, data.notes ?? null],
-    );
+    return withTransaction(async (client) => {
+      const result = await client.query(
+        `UPDATE requisitions SET
+           prepared_date       = COALESCE($3, prepared_date),
+           signed_file_id      = COALESCE($4, signed_file_id),
+           notes               = COALESCE($5, notes),
+           requested_by        = COALESCE($6, requested_by),
+           department_name     = COALESCE($7, department_name),
+           file_number         = COALESCE($8, file_number),
+           supply_priority     = COALESCE($9, supply_priority),
+           memorandum          = COALESCE($10, memorandum),
+           prepared_by         = COALESCE($11, prepared_by),
+           vat_rate            = COALESCE($12, vat_rate),
+           expense_code        = COALESCE($13, expense_code),
+           annual_budget       = COALESCE($14, annual_budget),
+           expenditure_to_date = COALESCE($15, expenditure_to_date),
+           amount_available    = COALESCE($16, amount_available),
+           authorised_manager  = COALESCE($17, authorised_manager),
+           accounting_officer  = COALESCE($18, accounting_officer),
+           updated_at          = now()
+         WHERE id = $1 AND ticket_id = $2 RETURNING *`,
+        [
+          id, ticketId, data.preparedDate ?? null, data.signedFileId ?? null, data.notes ?? null,
+          data.requestedBy ?? null, data.departmentName ?? null, data.fileNumber ?? null,
+          data.supplyPriority ?? null, data.memorandum ?? null,
+          data.preparedBy ?? null, data.vatRate ?? null, data.expenseCode ?? null,
+          data.annualBudget ?? null, data.expenditureToDate ?? null, data.amountAvailable ?? null,
+          data.authorisedManager ?? null, data.accountingOfficer ?? null,
+        ],
+      );
+      // Line items are replaced wholesale only when the caller sends them, so a
+      // partial field update never wipes an existing item list.
+      if (Array.isArray(data.items)) {
+        await this.replaceRequisitionItems(client, id, data.items as ItemInput[]);
+      }
+      return result.rows[0] ?? null;
+    });
+  },
+
+  /** Replace all line items for a requisition (delete + re-insert in order). */
+  async replaceRequisitionItems(client: PoolClient, requisitionId: string, items: ItemInput[]) {
+    await client.query(`DELETE FROM requisition_items WHERE requisition_id = $1`, [requisitionId]);
+    let order = 0;
+    for (const item of items) {
+      if (!item || !String(item.description ?? '').trim()) continue;
+      await client.query(
+        `INSERT INTO requisition_items (requisition_id, sort_order, quantity, unit, description, unit_price)
+         VALUES ($1, $2, COALESCE($3, 1), $4, $5, COALESCE($6, 0))`,
+        [
+          requisitionId, order++, item.quantity ?? null, item.unit ?? null,
+          String(item.description).trim(), item.unitPrice ?? null,
+        ],
+      );
+    }
   },
 
   /** One approval row per type per ticket; upsert semantics. */

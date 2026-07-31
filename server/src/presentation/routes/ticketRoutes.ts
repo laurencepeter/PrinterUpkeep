@@ -7,6 +7,7 @@ import { ticketService } from '../../application/ticketService';
 import { ticketRepo, TicketFilters } from '../../infrastructure/repositories/ticketRepo';
 import { procurementRepo } from '../../infrastructure/repositories/procurementRepo';
 import { auditRepo } from '../../infrastructure/repositories/auditRepo';
+import { renderRequisitionForm } from '../../application/requisitionForm';
 
 export const ticketRoutes = Router();
 ticketRoutes.use(requireAuth);
@@ -123,15 +124,46 @@ ticketRoutes.post(
   }),
 );
 
+const requisitionSchema = z.object({
+  id: z.string().uuid().optional(),
+  preparedDate: z.string().optional(),
+  signedFileId: z.string().uuid().optional(),
+  notes: z.string().optional(),
+  requestedBy: z.string().optional(),
+  departmentName: z.string().optional(),
+  fileNumber: z.string().optional(),
+  supplyPriority: z.enum(['emergency', 'urgent', 'regular']).optional(),
+  memorandum: z.string().optional(),
+  preparedBy: z.string().optional(),
+  vatRate: z.number().optional(),
+  expenseCode: z.string().optional(),
+  annualBudget: z.number().optional(),
+  expenditureToDate: z.number().optional(),
+  amountAvailable: z.number().optional(),
+  authorisedManager: z.string().optional(),
+  accountingOfficer: z.string().optional(),
+  items: z
+    .array(
+      z.object({
+        quantity: z.number().optional(),
+        unit: z.string().nullable().optional(),
+        description: z.string().min(1),
+        unitPrice: z.number().optional(),
+      }),
+    )
+    .optional(),
+});
+
 ticketRoutes.post(
   '/:id/requisitions',
   writeAccess,
   asyncHandler(async (req, res) => {
-    const result = req.body?.id
-      ? await procurementRepo.updateRequisition(String(req.body.id), req.params.id, req.body)
-      : await procurementRepo.createRequisition(req.params.id, req.body ?? {});
+    const data = requisitionSchema.parse(req.body ?? {});
+    const result = data.id
+      ? await procurementRepo.updateRequisition(data.id, req.params.id, data)
+      : await procurementRepo.createRequisition(req.params.id, data);
     await auditRepo.log({
-      entityType: 'requisition', entityId: String(result!.id), action: req.body?.id ? 'update' : 'create',
+      entityType: 'requisition', entityId: String(result!.id), action: data.id ? 'update' : 'create',
       userId: req.user!.id,
     });
     res.status(201).json(result);
@@ -190,7 +222,7 @@ ticketRoutes.get(
   }),
 );
 
-// Printable requisition form for signing.
+// Print-ready government requisition form for signing/stamping.
 ticketRoutes.get(
   '/:id/requisitions/:reqId/pdf',
   asyncHandler(async (req, res) => {
@@ -199,41 +231,31 @@ ticketRoutes.get(
       (r) => String(r.id) === req.params.reqId,
     );
     if (!requisition) throw new Error('Requisition not found');
-    const orgName = (await settingsRepo.get('org_name')) ?? 'ICT Department';
-    const t = detail.ticket as Record<string, unknown>;
-    const quotation = (detail.quotations as Array<Record<string, unknown>>)[0];
 
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const [govName, ministry, orgName, vatRate, logoBase64] = await Promise.all([
+      settingsRepo.get('org_gov_name'),
+      settingsRepo.get('org_ministry'),
+      settingsRepo.get('org_name'),
+      settingsRepo.get('vat_rate'),
+      settingsRepo.get('org_logo'),
+    ]);
+
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${requisition.requisition_number}.pdf"`);
     doc.pipe(res);
 
-    doc.fontSize(16).font('Helvetica-Bold').text(orgName, { align: 'center' });
-    doc.fontSize(13).text('PURCHASE REQUISITION', { align: 'center' });
-    doc.moveDown(1.5);
-
-    const line = (label: string, value: unknown) => {
-      doc.fontSize(10).font('Helvetica-Bold').text(`${label}: `, { continued: true });
-      doc.font('Helvetica').text(value === null || value === undefined ? '—' : String(value));
-      doc.moveDown(0.4);
-    };
-    line('Requisition Number', requisition.requisition_number);
-    line('Date Prepared', requisition.prepared_date);
-    line('Ticket Number', t.ticket_number);
-    line('Department', t.department_name);
-    line('Printer', t.printer_asset_number ? `${t.printer_asset_number} — ${t.printer_model}` : null);
-    line('Issue', t.issue_category);
-    line('Description', t.description);
-    line('Vendor', t.vendor_name);
-    if (quotation) {
-      line('Quotation Number', quotation.quotation_number);
-      line('Quotation Amount', quotation.amount ? `${quotation.currency} ${quotation.amount}` : null);
-    }
-    line('Notes', requisition.notes);
-    doc.moveDown(3);
-    doc.fontSize(10).font('Helvetica');
-    doc.text('_________________________          _________________________');
-    doc.text('Prepared By (ICT)                              Approved By (Accounts/GA)');
+    renderRequisitionForm(doc, {
+      requisition,
+      ticket: detail.ticket as Record<string, unknown>,
+      settings: {
+        govName: govName ?? 'Government of the Republic of Trinidad and Tobago',
+        ministry: ministry ?? 'Ministry of Rural Development and Local Government',
+        orgName: orgName ?? 'ICT Department',
+        vatRate: parseFloat(vatRate ?? '12.5') || 12.5,
+        logoBase64: logoBase64 ?? undefined,
+      },
+    });
     doc.end();
   }),
 );

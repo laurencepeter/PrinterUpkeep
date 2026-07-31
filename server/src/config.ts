@@ -34,6 +34,22 @@ export const config = {
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB ?? '20', 10),
   },
 
+  // Where uploaded documents are stored. 'disk' keeps them on the local
+  // UPLOAD_DIR volume (default); 'supabase' stores them in a Supabase Storage
+  // bucket. When STORAGE_DRIVER is unset it auto-selects 'supabase' if a
+  // SUPABASE_URL + service key are configured, else falls back to 'disk'.
+  storage: {
+    driver: (process.env.STORAGE_DRIVER as 'disk' | 'supabase' | undefined) ??
+      (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY ? 'supabase' : 'disk'),
+    supabase: {
+      // Base URL of the Supabase (Kong) gateway, e.g. https://supabase.example.com
+      url: (process.env.SUPABASE_URL ?? '').replace(/\/+$/, ''),
+      // service_role key — required for the API to read/write Storage server-side.
+      serviceKey: process.env.SUPABASE_SERVICE_KEY ?? '',
+      bucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'PrinterLogs',
+    },
+  },
+
   bootstrap: {
     adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
     adminPassword: process.env.ADMIN_PASSWORD ?? 'ChangeMe123!',

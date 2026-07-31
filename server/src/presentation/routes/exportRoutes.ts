@@ -43,6 +43,8 @@ exportRoutes.get(
     const rows = await run(req.query as Record<string, unknown>);
     const format = (req.query.format as string) ?? 'csv';
     const fileBase = `${req.params.entity}-${new Date().toISOString().slice(0, 10)}`;
+    const orgName = (await settingsRepo.get('org_name')) ?? 'ICT Department';
+    const title = `${req.params.entity.charAt(0).toUpperCase()}${req.params.entity.slice(1)}`;
 
     switch (format) {
       case 'json':
@@ -57,15 +59,13 @@ exportRoutes.get(
       case 'xlsx':
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.xlsx"`);
-        res.send(await exportService.toExcel(rows, req.params.entity));
+        res.send(await exportService.toExcel(rows, title, orgName));
         return;
-      case 'pdf': {
-        const orgName = (await settingsRepo.get('org_name')) ?? 'ICT Department';
+      case 'pdf':
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.pdf"`);
-        res.send(await exportService.toPdf(rows, `Export: ${req.params.entity}`, orgName));
+        res.send(await exportService.toPdf(rows, `Export: ${title}`, orgName));
         return;
-      }
       default:
         throw new ValidationError(`Unsupported format: ${format}`);
     }

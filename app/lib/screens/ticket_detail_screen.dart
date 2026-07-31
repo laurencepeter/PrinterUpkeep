@@ -265,11 +265,13 @@ class _TicketDetailView extends ConsumerWidget {
             'Requisition',
             requisition == null
                 ? 'Not prepared'
-                : '${requisition['requisition_number']} · ${_dateOnly(requisition['prepared_date']?.toString())}',
+                : '${requisition['requisition_number']} · ${_dateOnly(requisition['prepared_date']?.toString())}'
+                    '${_itemsSummary(requisition)}',
+            onEdit: requisition == null ? null : () => _requisitionDialog(context, ref, requisition),
             extra: [
               if (requisition != null)
                 IconButton(
-                  tooltip: 'Download PDF',
+                  tooltip: 'Download form (PDF)',
                   icon: const Icon(Icons.picture_as_pdf, size: 18),
                   onPressed: () => launchUrlString(api.downloadUrl(
                       '/api/tickets/${t.id}/requisitions/${requisition['id']}/pdf')),
@@ -280,10 +282,7 @@ class _TicketDetailView extends ConsumerWidget {
             TextButton.icon(
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Generate requisition'),
-              onPressed: () async {
-                await api.post('/api/tickets/${t.id}/requisitions', body: {});
-                ref.invalidate(ticketDetailProvider(t.id));
-              },
+              onPressed: () => _requisitionDialog(context, ref, null),
             ),
           const Divider(),
           Text('Accounts', style: Theme.of(context).textTheme.titleSmall),
@@ -646,6 +645,229 @@ class _TicketDetailView extends ConsumerWidget {
     }
   }
 
+  /// Full government requisition form editor: header/requester fields, priced
+  /// line items and the accounts block. Saving regenerates the print-ready PDF.
+  Future<void> _requisitionDialog(
+      BuildContext context, WidgetRef ref, Map<String, dynamic>? existing) async {
+    final t = detail.ticket;
+    final requestedBy = TextEditingController(
+        text: existing?['requested_by']?.toString() ?? t.reportedBy);
+    final departmentName = TextEditingController(
+        text: existing?['department_name']?.toString() ?? t.departmentName ?? '');
+    final fileNumber = TextEditingController(text: existing?['file_number']?.toString() ?? '');
+    final memorandum = TextEditingController(text: existing?['memorandum']?.toString() ?? '');
+    final preparedBy = TextEditingController(text: existing?['prepared_by']?.toString() ?? '');
+    final expenseCode = TextEditingController(text: existing?['expense_code']?.toString() ?? '');
+    final annualBudget = TextEditingController(text: existing?['annual_budget']?.toString() ?? '');
+    final expenditure = TextEditingController(text: existing?['expenditure_to_date']?.toString() ?? '');
+    final amountAvailable = TextEditingController(text: existing?['amount_available']?.toString() ?? '');
+    final authorisedManager = TextEditingController(text: existing?['authorised_manager']?.toString() ?? '');
+    final accountingOfficer = TextEditingController(text: existing?['accounting_officer']?.toString() ?? '');
+    String priority = existing?['supply_priority']?.toString() ?? 'regular';
+
+    // Editable line items, seeded from the existing requisition (one blank row
+    // if there are none yet).
+    final items = <_ReqItemControllers>[];
+    final existingItems = (existing?['items'] as List?) ?? const [];
+    for (final raw in existingItems) {
+      final m = raw as Map<String, dynamic>;
+      items.add(_ReqItemControllers(
+        qty: m['quantity']?.toString() ?? '1',
+        unit: m['unit']?.toString() ?? '',
+        description: m['description']?.toString() ?? '',
+        unitPrice: m['unit_price']?.toString() ?? '',
+      ));
+    }
+    if (items.isEmpty) items.add(_ReqItemControllers());
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          double subtotal = 0;
+          for (final it in items) {
+            subtotal += (double.tryParse(it.qty.text) ?? 0) * (double.tryParse(it.unitPrice.text) ?? 0);
+          }
+          final vat = subtotal * 0.125;
+          return AlertDialog(
+            title: Text(existing == null ? 'Generate Requisition' : 'Edit Requisition'),
+            content: SizedBox(
+              width: 640,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Auto-generated identifiers: shown for reference, not
+                    // editable (the number is assigned by the system; the date
+                    // defaults to today). The data fields below are pre-filled
+                    // with sensible defaults but remain editable.
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          enabled: false,
+                          decoration: const InputDecoration(labelText: 'Requisition # (auto)'),
+                          controller: TextEditingController(
+                              text: existing?['requisition_number']?.toString() ?? 'Assigned on save'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          enabled: false,
+                          decoration: const InputDecoration(labelText: 'Prepared date (auto)'),
+                          controller: TextEditingController(
+                              text: _dateOnly(existing?['prepared_date']?.toString()) == '—'
+                                  ? DateFormat('y-MM-dd').format(DateTime.now())
+                                  : _dateOnly(existing?['prepared_date']?.toString())),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextField(controller: requestedBy, decoration: const InputDecoration(labelText: 'Requested by'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextField(controller: departmentName, decoration: const InputDecoration(labelText: 'Department'))),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextField(controller: fileNumber, decoration: const InputDecoration(labelText: 'File #'))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: priority,
+                          decoration: const InputDecoration(labelText: 'Supply priority'),
+                          items: const [
+                            DropdownMenuItem(value: 'emergency', child: Text('Emergency')),
+                            DropdownMenuItem(value: 'urgent', child: Text('Urgent')),
+                            DropdownMenuItem(value: 'regular', child: Text('Regular')),
+                          ],
+                          onChanged: (v) => setState(() => priority = v ?? 'regular'),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+                    Text('Line items', style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 6),
+                    for (int i = 0; i < items.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(width: 50, child: TextField(controller: items[i].qty, decoration: const InputDecoration(labelText: 'Qty'), keyboardType: TextInputType.number, onChanged: (_) => setState(() {}))),
+                            const SizedBox(width: 6),
+                            SizedBox(width: 64, child: TextField(controller: items[i].unit, decoration: const InputDecoration(labelText: 'Unit'))),
+                            const SizedBox(width: 6),
+                            Expanded(child: TextField(controller: items[i].description, decoration: const InputDecoration(labelText: 'Description'))),
+                            const SizedBox(width: 6),
+                            SizedBox(width: 90, child: TextField(controller: items[i].unitPrice, decoration: const InputDecoration(labelText: 'Unit price'), keyboardType: TextInputType.number, onChanged: (_) => setState(() {}))),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, size: 18),
+                              onPressed: items.length == 1 ? null : () => setState(() => items.removeAt(i)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add line'),
+                        onPressed: () => setState(() => items.add(_ReqItemControllers())),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'Sub-Total: TTD ${subtotal.toStringAsFixed(2)}   ·   VAT 12.5%: TTD ${vat.toStringAsFixed(2)}   ·   '
+                        'Total: TTD ${(subtotal + vat).toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(controller: memorandum, maxLines: 2, decoration: const InputDecoration(labelText: 'Memorandum of justification')),
+                    const SizedBox(height: 10),
+                    TextField(controller: preparedBy, decoration: const InputDecoration(labelText: 'Prepared by (Head of Department)')),
+                    const Divider(height: 24),
+                    Text('Accounts department (optional)', style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      Expanded(child: TextField(controller: expenseCode, decoration: const InputDecoration(labelText: 'Expense item (code)'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextField(controller: annualBudget, decoration: const InputDecoration(labelText: 'Annual budget'), keyboardType: TextInputType.number)),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextField(controller: expenditure, decoration: const InputDecoration(labelText: 'Expenditure to date'), keyboardType: TextInputType.number)),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextField(controller: amountAvailable, decoration: const InputDecoration(labelText: 'Amount available'), keyboardType: TextInputType.number)),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextField(controller: authorisedManager, decoration: const InputDecoration(labelText: 'Authorised manager'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextField(controller: accountingOfficer, decoration: const InputDecoration(labelText: 'Accounting officer'))),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok == true) {
+      final itemsPayload = [
+        for (final it in items)
+          if (it.description.text.trim().isNotEmpty)
+            {
+              'quantity': double.tryParse(it.qty.text) ?? 1,
+              if (it.unit.text.trim().isNotEmpty) 'unit': it.unit.text.trim(),
+              'description': it.description.text.trim(),
+              'unitPrice': double.tryParse(it.unitPrice.text) ?? 0,
+            },
+      ];
+      num? parseNum(String s) => s.trim().isEmpty ? null : double.tryParse(s.trim());
+      await _apiAction(context, ref, () async {
+        await ref.read(apiProvider).post('/api/tickets/${t.id}/requisitions', body: {
+          if (existing != null) 'id': existing['id'],
+          'requestedBy': requestedBy.text.trim(),
+          'departmentName': departmentName.text.trim(),
+          if (fileNumber.text.trim().isNotEmpty) 'fileNumber': fileNumber.text.trim(),
+          'supplyPriority': priority,
+          if (memorandum.text.trim().isNotEmpty) 'memorandum': memorandum.text.trim(),
+          if (preparedBy.text.trim().isNotEmpty) 'preparedBy': preparedBy.text.trim(),
+          if (expenseCode.text.trim().isNotEmpty) 'expenseCode': expenseCode.text.trim(),
+          if (parseNum(annualBudget.text) != null) 'annualBudget': parseNum(annualBudget.text),
+          if (parseNum(expenditure.text) != null) 'expenditureToDate': parseNum(expenditure.text),
+          if (parseNum(amountAvailable.text) != null) 'amountAvailable': parseNum(amountAvailable.text),
+          if (authorisedManager.text.trim().isNotEmpty) 'authorisedManager': authorisedManager.text.trim(),
+          if (accountingOfficer.text.trim().isNotEmpty) 'accountingOfficer': accountingOfficer.text.trim(),
+          'items': itemsPayload,
+        });
+      });
+    }
+  }
+
+  /// Trailing "· N items · TTD X" summary for the requisition row.
+  static String _itemsSummary(Map<String, dynamic> requisition) {
+    final items = (requisition['items'] as List?) ?? const [];
+    if (items.isEmpty) return '';
+    double subtotal = 0;
+    for (final raw in items) {
+      final m = raw as Map<String, dynamic>;
+      subtotal += (double.tryParse('${m['quantity']}') ?? 0) * (double.tryParse('${m['unit_price']}') ?? 0);
+    }
+    final total = subtotal * 1.125;
+    return ' · ${items.length} item(s) · TTD ${total.toStringAsFixed(2)}';
+  }
+
   Future<void> _addNoteDialog(BuildContext context, WidgetRef ref) async {
     final note = TextEditingController();
     final ok = await showDialog<bool>(
@@ -791,4 +1013,18 @@ class _TicketDetailView extends ConsumerWidget {
     final dt = DateTime.tryParse('$value')?.toLocal();
     return dt == null ? '$value' : DateFormat('d MMM y, h:mm a').format(dt);
   }
+}
+
+/// Text controllers backing one editable requisition line item.
+class _ReqItemControllers {
+  _ReqItemControllers({String qty = '1', String unit = '', String description = '', String unitPrice = ''})
+      : qty = TextEditingController(text: qty),
+        unit = TextEditingController(text: unit),
+        description = TextEditingController(text: description),
+        unitPrice = TextEditingController(text: unitPrice);
+
+  final TextEditingController qty;
+  final TextEditingController unit;
+  final TextEditingController description;
+  final TextEditingController unitPrice;
 }
