@@ -27,6 +27,36 @@ reportRoutes.get('/', (_req, res) => {
   res.json(Object.entries(REPORTS).map(([key, r]) => ({ key, title: r.title })));
 });
 
+// One-click pack of every report. GET /api/reports/all?format=xlsx|pdf
+// Runs all reports in parallel and returns a single styled workbook (a sheet
+// per report + contents) or a charted multi-page PDF. Defined before /:key so
+// "all" is not swallowed by the single-report route.
+reportRoutes.get(
+  '/all',
+  asyncHandler(async (req, res) => {
+    const format = (req.query.format as string) ?? 'xlsx';
+    const orgName = (await settingsRepo.get('org_name')) ?? 'ICT Department';
+    const entries = Object.values(REPORTS);
+    const results = await Promise.all(entries.map((r) => r.run()));
+    const sections = entries.map((r, i) => ({ title: r.title, rows: results[i] }));
+    const fileBase = `all-reports-${new Date().toISOString().slice(0, 10)}`;
+
+    if (format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.pdf"`);
+      res.send(await exportService.toBundlePdf(sections, orgName));
+      return;
+    }
+    if (format === 'xlsx') {
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.xlsx"`);
+      res.send(await exportService.toWorkbook(sections, orgName));
+      return;
+    }
+    throw new ValidationError(`Unsupported format for the reports pack: ${format} (use xlsx or pdf)`);
+  }),
+);
+
 // Consolidated executive summary: headline KPIs plus the supporting
 // breakdowns (workload per ICT officer, most active printers, monthly trend,
 // common issues) that justify ICT resourcing — assembled in one round-trip.
@@ -60,6 +90,7 @@ reportRoutes.get(
     const rows = await report.run();
     const format = (req.query.format as string) ?? 'json';
     const fileBase = req.params.key;
+    const orgName = (await settingsRepo.get('org_name')) ?? 'ICT Department';
 
     switch (format) {
       case 'json':
@@ -73,15 +104,13 @@ reportRoutes.get(
       case 'xlsx':
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.xlsx"`);
-        res.send(await exportService.toExcel(rows, report.title));
+        res.send(await exportService.toExcel(rows, report.title, orgName));
         return;
-      case 'pdf': {
-        const orgName = (await settingsRepo.get('org_name')) ?? 'ICT Department';
+      case 'pdf':
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${fileBase}.pdf"`);
         res.send(await exportService.toPdf(rows, report.title, orgName));
         return;
-      }
       default:
         throw new ValidationError(`Unsupported format: ${format}`);
     }

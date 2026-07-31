@@ -698,6 +698,32 @@ class _TicketDetailView extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Auto-generated identifiers: shown for reference, not
+                    // editable (the number is assigned by the system; the date
+                    // defaults to today). The data fields below are pre-filled
+                    // with sensible defaults but remain editable.
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          enabled: false,
+                          decoration: const InputDecoration(labelText: 'Requisition # (auto)'),
+                          controller: TextEditingController(
+                              text: existing?['requisition_number']?.toString() ?? 'Assigned on save'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          enabled: false,
+                          decoration: const InputDecoration(labelText: 'Prepared date (auto)'),
+                          controller: TextEditingController(
+                              text: _dateOnly(existing?['prepared_date']?.toString()) == '—'
+                                  ? DateFormat('y-MM-dd').format(DateTime.now())
+                                  : _dateOnly(existing?['prepared_date']?.toString())),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
                     Row(children: [
                       Expanded(child: TextField(controller: requestedBy, decoration: const InputDecoration(labelText: 'Requested by'))),
                       const SizedBox(width: 10),
