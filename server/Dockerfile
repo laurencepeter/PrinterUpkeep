@@ -14,6 +14,8 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+# Branding assets (e.g. assets/coat-of-arms.png for the requisition form).
+COPY assets ./assets
 RUN mkdir -p /app/uploads && chown -R node:node /app
 USER node
 EXPOSE 8080
