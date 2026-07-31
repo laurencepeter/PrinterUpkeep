@@ -197,7 +197,18 @@ export const ticketRepo = {
   },
 
   async requisitions(ticketId: string) {
-    return query(`SELECT * FROM requisitions WHERE ticket_id = $1 ORDER BY created_at`, [ticketId]);
+    return query(
+      `SELECT r.*,
+              COALESCE(
+                (SELECT json_agg(i ORDER BY i.sort_order)
+                 FROM requisition_items i WHERE i.requisition_id = r.id),
+                '[]'
+              ) AS items
+       FROM requisitions r
+       WHERE r.ticket_id = $1
+       ORDER BY r.created_at`,
+      [ticketId],
+    );
   },
 
   async approvals(ticketId: string) {

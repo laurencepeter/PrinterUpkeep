@@ -42,6 +42,14 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_TTL: ${JWT_TTL:-12h}
       UPLOAD_DIR: /app/uploads
+      # Document storage backend. 'disk' (default) keeps uploads on the local
+      # uploads volume; 'supabase' stores them in a Supabase Storage bucket.
+      # Leave STORAGE_DRIVER unset to auto-select supabase when SUPABASE_URL +
+      # SUPABASE_SERVICE_KEY are provided, else disk.
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-PrinterLogs}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
       ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-System Administrator}
