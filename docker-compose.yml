@@ -34,8 +34,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      DB_HOST: db
-      DB_PORT: 5432
+      # Defaults to the bundled `db` service, but overridable so you can point
+      # the API at an external Postgres (e.g. Supabase) via DB_HOST/DB_PORT.
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-printerupkeep}
       DB_USER: ${DB_USER:-printerupkeep}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
