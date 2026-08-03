@@ -71,6 +71,8 @@ services:
     # For local development, docker-compose.override.yml re-adds a build context
     # so `docker compose up --build` still builds web from ./app source.
     image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
+    ports:
+      8081:80
     restart: unless-stopped
     depends_on:
       api:
