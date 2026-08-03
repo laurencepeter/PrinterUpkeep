@@ -75,8 +75,12 @@ services:
     # For local development, docker-compose.override.yml re-adds a build context
     # so `docker compose up --build` still builds web from ./app source.
     image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
+    # Publish the UI on a host port. Overridable via WEB_PORT so you can move it
+    # off a port that's already taken on the host without editing this file.
+    # (On Coolify you can instead attach a domain and drop this mapping — the
+    # platform proxy routes to the container's exposed port 80.)
     ports:
-      8081:80
+      - "${WEB_PORT:-8081}:80"
     restart: unless-stopped
     depends_on:
       api:
