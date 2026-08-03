@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { pool } from './pool';
+import { config } from '../config';
 
 /**
  * Minimal forward-only SQL migrator. Applies migrations/NNN_*.sql in
@@ -8,6 +9,9 @@ import { pool } from './pool';
  * runs in its own transaction.
  */
 export async function runMigrations(): Promise<void> {
+  // Ensure the app schema exists before anything else, so schema_migrations and
+  // every table land in it (the pool already puts it first on search_path).
+  await pool.query(`CREATE SCHEMA IF NOT EXISTS "${config.db.schema}"`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version    TEXT PRIMARY KEY,

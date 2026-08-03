@@ -1,3 +1,6 @@
+-- Target the PrinterUpkeep schema (see migration 001).
+SET search_path TO printerupkeep, public;
+
 -- ============================================================================
 -- Migration 004: Structured consumables catalogue + approval attribution
 --

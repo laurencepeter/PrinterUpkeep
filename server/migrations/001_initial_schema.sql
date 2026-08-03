@@ -1,3 +1,8 @@
+-- All PrinterUpkeep objects live in a dedicated 'printerupkeep' schema so they
+-- are isolated from Supabase's public schema and anything else in the database.
+CREATE SCHEMA IF NOT EXISTS printerupkeep;
+SET search_path TO printerupkeep, public;
+
 -- ============================================================================
 -- ICT Printer Upkeep & Procurement Tracking System
 -- Migration 001: Initial schema

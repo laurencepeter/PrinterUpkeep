@@ -9,6 +9,10 @@ export const pool = new Pool({
   password: config.db.password,
   max: config.db.maxConnections,
   idleTimeoutMillis: 30_000,
+  // Resolve every unqualified table/query against the app's own schema first,
+  // then public (so built-in/extension functions still resolve). Applied at
+  // connection start so it holds for every pooled connection.
+  options: `-c search_path=${config.db.schema},public`,
 });
 
 export async function query<T extends QueryResultRow = QueryResultRow>(

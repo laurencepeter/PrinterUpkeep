@@ -1,3 +1,6 @@
+-- Target the PrinterUpkeep schema (see migration 001).
+SET search_path TO printerupkeep, public;
+
 -- ============================================================================
 -- Migration 003: Extended printer details
 --   * name (friendly name / hostname shown to users)
