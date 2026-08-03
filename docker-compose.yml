@@ -80,7 +80,7 @@ services:
     # (On Coolify you can instead attach a domain and drop this mapping — the
     # platform proxy routes to the container's exposed port 80.)
     ports:
-      - "${WEB_PORT:-8081}:80"
+      - "${WEB_PORT:-8082}:80"
     restart: unless-stopped
     depends_on:
       api:
