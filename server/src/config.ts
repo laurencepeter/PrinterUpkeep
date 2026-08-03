@@ -20,6 +20,10 @@ export const config = {
     database: required('DB_NAME', 'printerupkeep'),
     user: required('DB_USER', 'printerupkeep'),
     password: required('DB_PASSWORD', 'printerupkeep'),
+    // All app objects live in a dedicated schema (isolated from Supabase's
+    // public schema). Sanitised to a plain identifier since it's interpolated
+    // into the connection's search_path.
+    schema: (process.env.DB_SCHEMA ?? 'printerupkeep').replace(/[^a-zA-Z0-9_]/g, '') || 'printerupkeep',
     // ≤25 concurrent users; 10 pooled connections is generous headroom.
     maxConnections: parseInt(process.env.DB_POOL_SIZE ?? '10', 10),
   },

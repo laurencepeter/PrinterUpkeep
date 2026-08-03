@@ -1,3 +1,6 @@
+-- Target the PrinterUpkeep schema (see migration 001).
+SET search_path TO printerupkeep, public;
+
 -- ============================================================================
 -- Migration 005: Administrative printer controls
 --

@@ -1,3 +1,6 @@
+-- Target the PrinterUpkeep schema (see migration 001).
+SET search_path TO printerupkeep, public;
+
 -- ============================================================================
 -- Migration 002: Reference data (roles, workflow stages, issue categories,
 -- default settings). Idempotent inserts so re-running is safe.

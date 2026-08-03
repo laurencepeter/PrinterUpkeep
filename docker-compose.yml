@@ -39,6 +39,8 @@ services:
       DB_NAME: ${DB_NAME:-printerupkeep}
       DB_USER: ${DB_USER:-printerupkeep}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Schema the app creates and uses (isolated from public). Rarely changed.
+      DB_SCHEMA: ${DB_SCHEMA:-printerupkeep}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       JWT_TTL: ${JWT_TTL:-12h}
       UPLOAD_DIR: /app/uploads
