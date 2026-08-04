@@ -14,6 +14,14 @@ services:
       context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Join the shared Coolify network in addition to this stack's default one,
+    # so the api can reach an external Postgres/Supabase running as a separate
+    # Coolify resource (e.g. resolve `supabase-db`). `default` keeps web↔api
+    # working. If your shared network isn't named `coolify`, change the `name:`
+    # under the top-level `networks:` block below.
+    networks:
+      - default
+      - shared
     environment:
       NODE_ENV: production
       PORT: 8080
@@ -67,7 +75,11 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_healthy
+        # Only wait for the api container to start, not to be healthy: nginx
+        # returns 502 until the api is reachable (graceful), and gating web on
+        # api health means a crash-looping api tears the whole deploy down and
+        # discards its logs — making failures impossible to diagnose.
+        condition: service_started
     # No fixed host port is published here on purpose. On a managed PaaS
     # (Coolify, etc.) the platform's reverse proxy routes your domain to this
     # container's port 80, so binding a host port would only cause
@@ -90,3 +102,16 @@ services:
 
 volumes:
   uploads:
+
+networks:
+  # This stack's own network (web ↔ api).
+  default:
+  # The pre-existing shared Coolify network that the Supabase resource is also
+  # connected to. `external: true` means Compose won't create it — it must
+  # already exist. Set `name:` to whatever network Supabase's `supabase-db`
+  # container is on (commonly `coolify`); verify with:
+  #   docker inspect <supabase-db container> \
+  #     --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}'
+  shared:
+    external: true
+    name: coolify
