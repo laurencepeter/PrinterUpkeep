@@ -67,7 +67,11 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_healthy
+        # Only wait for the api container to start, not to be healthy: nginx
+        # returns 502 until the api is reachable (graceful), and gating web on
+        # api health means a crash-looping api tears the whole deploy down and
+        # discards its logs — making failures impossible to diagnose.
+        condition: service_started
     # No fixed host port is published here on purpose. On a managed PaaS
     # (Coolify, etc.) the platform's reverse proxy routes your domain to this
     # container's port 80, so binding a host port would only cause
