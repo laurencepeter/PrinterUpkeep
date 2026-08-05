@@ -1,129 +1,39 @@
-# Full application stack for PrinterUpkeep.
+# PrinterUpkeep — Supabase-native deployment.
 #
-# Everything is built from source on deploy — there is no root Dockerfile
-# because this is a multi-service app. Point your host/PaaS at this file
-# (build type: "Docker Compose") and it will build the api + web images.
-# The database is an EXTERNAL Postgres (e.g. Supabase) — set DB_HOST/DB_PORT/
-# DB_NAME/DB_USER/DB_PASSWORD in the environment. There is no bundled db.
+# Only the Flutter web frontend runs here. It talks DIRECTLY to Supabase
+# (Auth + PostgREST) over HTTPS from the browser — there is no backend service
+# or database in this stack. Security is enforced by Supabase Row-Level Security.
 #
-#   docker compose up -d --build
+# Set SUPABASE_URL + SUPABASE_ANON_KEY in the environment (Coolify). They are
+# written into /config.json at container start (app/web-config.sh) and read by
+# the app; the anon key is public by design (RLS controls access).
+#
+#   docker compose up -d
 #
 services:
-  api:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    # Join the shared Coolify network in addition to this stack's default one,
-    # so the api can reach an external Postgres/Supabase running as a separate
-    # Coolify resource (e.g. resolve `supabase-db`). `default` keeps web↔api
-    # working. If your shared network isn't named `coolify`, change the `name:`
-    # under the top-level `networks:` block below.
-    networks:
-      - default
-      - shared
-    environment:
-      NODE_ENV: production
-      PORT: 8080
-      # Supabase Postgres connection. These are FIXED for this deployment and
-      # set here as literals — NOT via Coolify env vars — on purpose: Coolify
-      # kept re-injecting stale values (e.g. DB_HOST=db) from its own store and
-      # resetting them on every redeploy. Literals in the compose always win, so
-      # this stops the resets for good. Only the secret (DB_PASSWORD) comes from
-      # Coolify. If your Supabase Postgres host/user differ, edit them here.
-      DB_HOST: supabase-db
-      DB_PORT: "5432"
-      DB_NAME: postgres
-      DB_USER: supabase_admin
-      DB_SCHEMA: printerupkeep
-      # Secret — set this in Coolify's Environment Variables (it has no default,
-      # so Coolify does not reset it).
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in Coolify}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in Coolify}
-      JWT_TTL: "12h"
-      UPLOAD_DIR: /app/uploads
-      # Document storage backend. 'disk' (default) keeps uploads on the local
-      # uploads volume; 'supabase' stores them in a Supabase Storage bucket.
-      # Leave STORAGE_DRIVER unset to auto-select supabase when SUPABASE_URL +
-      # SUPABASE_SERVICE_KEY are provided, else disk.
-      STORAGE_DRIVER: ${STORAGE_DRIVER:-}
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
-      SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-PrinterLogs}
-      ADMIN_USERNAME: admin
-      # First-boot admin password — set in Coolify (falls back to ChangeMe123!).
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
-      ADMIN_FULL_NAME: System Administrator
-    volumes:
-      - uploads:/app/uploads
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
   web:
     # Pre-built by CI (.github/workflows/build-web-image.yml) and pulled at
-    # deploy time — the Flutter web build is far too slow/heavy (~2 GB SDK
-    # image) to build inside a managed host's deploy window, so we build it on
-    # GitHub Actions instead and the deploy host just pulls this small nginx
-    # image. Override WEB_IMAGE to pin a specific tag/digest.
-    # For local development, docker-compose.override.yml re-adds a build context
-    # so `docker compose up --build` still builds web from ./app source.
+    # deploy time. Override WEB_IMAGE to pin a specific tag/digest. For local
+    # development, docker-compose.override.yml re-adds a build context so
+    # `docker compose up --build` builds web from ./app source.
     image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
-    # Supabase config for the Flutter app, written into /config.json at container
-    # start (see app/web-config.sh). Set these in Coolify's env vars. The anon
-    # key is public — Row-Level Security controls access.
+    restart: unless-stopped
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
-    # Publish the UI on a host port. Overridable via WEB_PORT so you can move it
-    # off a port that's already taken on the host without editing this file.
-    # (On Coolify you can instead attach a domain and drop this mapping — the
-    # platform proxy routes to the container's exposed port 80.)
+    # Publish the UI on a host port (overridable via WEB_PORT). On Coolify you
+    # can instead attach a domain and drop this mapping — the platform proxy
+    # routes to the container's exposed port 80.
     ports:
       - "${WEB_PORT:-8082}:80"
-    restart: unless-stopped
-    depends_on:
-      api:
-        # Only wait for the api container to start, not to be healthy: nginx
-        # returns 502 until the api is reachable (graceful), and gating web on
-        # api health means a crash-looping api tears the whole deploy down and
-        # discards its logs — making failures impossible to diagnose.
-        condition: service_started
-    # No fixed host port is published here on purpose. On a managed PaaS
-    # (Coolify, etc.) the platform's reverse proxy routes your domain to this
-    # container's port 80, so binding a host port would only cause
-    # "port is already allocated" collisions on the shared host.
-    # For a plain `docker compose up`, docker-compose.override.yml publishes
-    # ${WEB_PORT:-8000}:80 automatically — see that file.
     expose:
       - "80"
-    # Use 127.0.0.1, not localhost: nginx here listens on IPv4 only (`listen 80;`)
-    # and the image's ipv6-by-default entrypoint skips adding `listen [::]:80;`
-    # because this custom default.conf differs from the packaged one. busybox
-    # wget resolves `localhost` to ::1 first, gets connection-refused, and the
-    # container is reported unhealthy even though nginx is serving fine.
+    # Use 127.0.0.1, not localhost: nginx listens on IPv4 only, and busybox wget
+    # resolves localhost to ::1 first (connection-refused) — reporting the
+    # container unhealthy even though nginx is serving fine.
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-
-volumes:
-  uploads:
-
-networks:
-  # This stack's own network (web ↔ api).
-  default:
-  # The pre-existing shared Coolify network that the Supabase resource is also
-  # connected to. `external: true` means Compose won't create it — it must
-  # already exist. Set `name:` to whatever network Supabase's `supabase-db`
-  # container is on (commonly `coolify`); verify with:
-  #   docker inspect <supabase-db container> \
-  #     --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}'
-  shared:
-    external: true
-    name: coolify
