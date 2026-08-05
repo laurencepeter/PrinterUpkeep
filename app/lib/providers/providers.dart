@@ -1,14 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../core/api_client.dart';
 import '../models/models.dart';
 
 final apiProvider = Provider<ApiClient>((ref) => ApiClient());
-
-/// Supabase client. Data queries target the `printerupkeep` schema via
-/// `sb.schema('printerupkeep').from(...)`.
-final supabaseProvider = Provider<SupabaseClient>((ref) => Supabase.instance.client);
 
 // --- Theme ------------------------------------------------------------------
 
@@ -37,67 +32,52 @@ class AuthState {
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.read(supabaseProvider));
+  return AuthNotifier(ref.read(apiProvider));
 });
 
-/// Auth backed by Supabase Auth (email + password). The app-specific role +
-/// display name live in printerupkeep.profiles, keyed to the auth user id.
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._sb) : super(const AuthState()) {
+  AuthNotifier(this._api) : super(const AuthState()) {
     _restore();
-    // Clear local state if the Supabase session ends (expiry / sign-out).
-    _sb.auth.onAuthStateChange.listen((data) {
-      if (data.session == null && mounted) state = const AuthState();
-    });
   }
 
-  final SupabaseClient _sb;
+  final ApiClient _api;
 
-  /// Load the caller's profile (role, full name) to build an AuthUser.
-  Future<AuthUser> _profile(User user) async {
+  Future<void> _restore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    if (token == null) return;
+    _api.token = token;
     try {
-      final row = await _sb
-          .schema('printerupkeep')
-          .from('profiles')
-          .select('full_name, role')
-          .eq('id', user.id)
-          .maybeSingle();
-      final fullName = (row?['full_name'] as String?) ?? '';
-      return AuthUser(
-        id: user.id,
-        username: user.email ?? '',
-        fullName: fullName.isNotEmpty ? fullName : (user.email ?? ''),
-        role: (row?['role'] as String?) ?? 'viewer',
+      final me = await _api.get('/api/auth/me');
+      state = AuthState(
+        user: AuthUser(
+          id: me['id'],
+          username: me['username'],
+          fullName: me['full_name'] ?? '',
+          role: me['role'] ?? 'viewer',
+        ),
       );
     } catch (_) {
-      return AuthUser(id: user.id, username: user.email ?? '', fullName: user.email ?? '', role: 'viewer');
+      _api.token = null;
+      prefs.remove('token');
     }
   }
 
-  Future<void> _restore() async {
-    final user = _sb.auth.currentUser;
-    if (user != null) state = AuthState(user: await _profile(user));
-  }
-
-  Future<void> login(String email, String password) async {
+  Future<void> login(String username, String password) async {
     state = const AuthState(loading: true);
     try {
-      final res = await _sb.auth.signInWithPassword(email: email.trim(), password: password);
-      final user = res.user;
-      if (user == null) {
-        state = const AuthState(error: 'Login failed');
-        return;
-      }
-      state = AuthState(user: await _profile(user));
-    } on AuthException catch (e) {
-      state = AuthState(error: e.message);
+      final data = await _api.post('/api/auth/login', body: {'username': username, 'password': password});
+      _api.token = data['token'];
+      (await SharedPreferences.getInstance()).setString('token', data['token']);
+      state = AuthState(user: AuthUser.fromJson(data['user']));
     } catch (e) {
-      state = AuthState(error: e.toString());
+      state = AuthState(error: ApiClient.errorMessage(e));
     }
   }
 
   Future<void> logout() async {
-    await _sb.auth.signOut();
+    _api.token = null;
+    (await SharedPreferences.getInstance()).remove('token');
     state = const AuthState();
   }
 }

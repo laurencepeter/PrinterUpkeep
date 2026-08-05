@@ -1,9 +1,6 @@
-import 'dart:convert';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme.dart';
 import 'providers/providers.dart';
 import 'screens/audit_log_screen.dart';
@@ -21,33 +18,7 @@ import 'screens/tickets_screen.dart';
 import 'screens/users_screen.dart';
 import 'screens/vendors_screen.dart';
 
-/// Supabase URL + anon key (the anon key is safe in the client — Row-Level
-/// Security controls access). Compile-time --dart-define wins; otherwise the
-/// values are read at runtime from /config.json, which nginx generates from the
-/// container's env vars — so the same pre-built web image works across
-/// deployments without a rebuild.
-const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-
-Future<(String url, String anonKey)> _supabaseConfig() async {
-  if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
-    return (_supabaseUrl, _supabaseAnonKey);
-  }
-  try {
-    final res = await Dio().get('/config.json');
-    final data = res.data is String ? jsonDecode(res.data as String) : res.data as Map;
-    return ((data['SUPABASE_URL'] ?? '') as String, (data['SUPABASE_ANON_KEY'] ?? '') as String);
-  } catch (_) {
-    return ('', '');
-  }
-}
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final (url, anonKey) = await _supabaseConfig();
-  if (url.isNotEmpty && anonKey.isNotEmpty) {
-    await Supabase.initialize(url: url, anonKey: anonKey);
-  }
+void main() {
   runApp(const ProviderScope(child: PrinterUpkeepApp()));
 }
 
