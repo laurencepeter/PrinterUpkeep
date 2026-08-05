@@ -31,8 +31,4 @@ RUN flutter build web --release --no-pub -O2
 FROM nginx:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-# Write /config.json (Supabase URL + anon key) from env vars at container start,
-# so the same pre-built image is pointed at Supabase via runtime env — no rebuild.
-COPY web-config.sh /docker-entrypoint.d/40-web-config.sh
-RUN chmod +x /docker-entrypoint.d/40-web-config.sh
 EXPOSE 80

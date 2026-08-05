@@ -48,8 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: _username,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.person)),
+                        decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person)),
                         validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                         onFieldSubmitted: (_) => _submit(),
                         autofocus: true,
