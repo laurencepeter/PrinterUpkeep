@@ -15,6 +15,30 @@ export const pool = new Pool({
   options: `-c search_path=${config.db.schema},public`,
 });
 
+/**
+ * Wait until the database is reachable before proceeding. On a fresh deploy the
+ * app can start before Docker's embedded DNS / an external network attachment
+ * (e.g. reaching Supabase's `supabase-db` across the shared network) is ready,
+ * so the first connection can fail transiently with EAI_AGAIN/ENOTFOUND/
+ * ECONNREFUSED. Retry with a short delay instead of crashing on the first try.
+ */
+export async function waitForDatabase(retries = 20, delayMs = 2000): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await pool.query('SELECT 1');
+      if (attempt > 1) console.log(`[db] connected after ${attempt} attempts`);
+      return;
+    } catch (err) {
+      const e = err as Error & { code?: string };
+      if (attempt >= retries) throw err;
+      console.warn(
+        `[db] not ready (attempt ${attempt}/${retries}): ${e.code ?? e.message} — retrying in ${delayMs}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params: unknown[] = [],

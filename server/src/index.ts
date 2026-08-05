@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config';
 import { runMigrations } from './db/migrate';
+import { waitForDatabase } from './db/pool';
 import { authService } from './application/authService';
 import { notificationService } from './application/notificationService';
 import { errorHandler } from './presentation/middleware';
@@ -19,6 +20,7 @@ import { fileRoutes } from './presentation/routes/fileRoutes';
 import { auditRoutes, notificationRoutes, settingsRoutes } from './presentation/routes/miscRoutes';
 
 async function main(): Promise<void> {
+  await waitForDatabase();
   await runMigrations();
   await authService.bootstrapAdmin();
 
