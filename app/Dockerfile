@@ -25,16 +25,14 @@ RUN sed -i \
 # build fits the deploy build window, at a negligible runtime cost for an
 # internal dashboard (output is still minified and tree-shaken).
 COPY lib ./lib
-# Supabase config baked into the web build (anon key is public — RLS guards
-# access). Coolify passes these as build args from the app's env vars.
-ARG SUPABASE_URL
-ARG SUPABASE_ANON_KEY
-RUN flutter build web --release --no-pub -O2 \
-      --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-      --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+RUN flutter build web --release --no-pub -O2
 
 # ---- runtime stage: nginx ------------------------------------------------------
 FROM nginx:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Write /config.json (Supabase URL + anon key) from env vars at container start,
+# so the same pre-built image is pointed at Supabase via runtime env — no rebuild.
+COPY web-config.sh /docker-entrypoint.d/40-web-config.sh
+RUN chmod +x /docker-entrypoint.d/40-web-config.sh
 EXPOSE 80

@@ -72,6 +72,12 @@ services:
     # For local development, docker-compose.override.yml re-adds a build context
     # so `docker compose up --build` still builds web from ./app source.
     image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
+    # Supabase config for the Flutter app, written into /config.json at container
+    # start (see app/web-config.sh). Set these in Coolify's env vars. The anon
+    # key is public — Row-Level Security controls access.
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     # Publish the UI on a host port. Overridable via WEB_PORT so you can move it
     # off a port that's already taken on the host without editing this file.
     # (On Coolify you can instead attach a domain and drop this mapping — the
