@@ -14,11 +14,12 @@ services:
       context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
-    # Join the shared Coolify network in addition to this stack's default one,
-    # so the api can reach an external Postgres/Supabase running as a separate
-    # Coolify resource (e.g. resolve `supabase-db`). `default` keeps web↔api
-    # working. If your shared network isn't named `coolify`, change the `name:`
-    # under the top-level `networks:` block below.
+    # Join the Supabase project network in addition to this stack's default one,
+    # so the api can reach the Supabase Postgres running as a separate Coolify
+    # resource (resolve `supabase-db`). `default` keeps web↔api working. The
+    # `supabase-db` alias is registered ONLY on Supabase's own project network
+    # (NOT on `coolify`), so `shared` must point at that project network — see
+    # the `name:` under the top-level `networks:` block below.
     networks:
       - default
       - shared
@@ -112,12 +113,14 @@ volumes:
 networks:
   # This stack's own network (web ↔ api).
   default:
-  # The pre-existing shared Coolify network that the Supabase resource is also
-  # connected to. `external: true` means Compose won't create it — it must
-  # already exist. Set `name:` to whatever network Supabase's `supabase-db`
-  # container is on (commonly `coolify`); verify with:
+  # The Supabase resource's own project network — this is the ONLY network on
+  # which the `supabase-db` hostname alias is registered. `external: true`
+  # means Compose won't create it — it must already exist (Coolify creates it
+  # for the Supabase resource). If you redeploy Supabase and Coolify assigns it
+  # a new project-network name, update the `name:` below to match. Verify with:
   #   docker inspect <supabase-db container> \
-  #     --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}'
+  #     --format '{{range $k,$v := .NetworkSettings.Networks}}net={{$k}} aliases={{$v.Aliases}}{{"\n"}}{{end}}'
+  # and use the net= whose aliases include `supabase-db`.
   shared:
     external: true
-    name: coolify
+    name: ti95520ai7il5rwfwfy3sso1
