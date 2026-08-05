@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme.dart';
 import 'providers/providers.dart';
 import 'screens/audit_log_screen.dart';
@@ -18,7 +19,16 @@ import 'screens/tickets_screen.dart';
 import 'screens/users_screen.dart';
 import 'screens/vendors_screen.dart';
 
-void main() {
+/// Supabase project URL + anon key, injected at build time via --dart-define
+/// (the anon key is safe in the client — Row-Level Security controls access).
+const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
+    await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
+  }
   runApp(const ProviderScope(child: PrinterUpkeepApp()));
 }
 
