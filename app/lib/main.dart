@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/theme.dart';
@@ -19,6 +20,10 @@ import 'screens/users_screen.dart';
 import 'screens/vendors_screen.dart';
 
 void main() {
+  // Clean URLs (/vendors) instead of the default hash URLs (/#/vendors).
+  // nginx's `try_files ... /index.html` fallback serves deep links / refreshes.
+  // No-op on non-web platforms.
+  usePathUrlStrategy();
   runApp(const ProviderScope(child: PrinterUpkeepApp()));
 }
 
