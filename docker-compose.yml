@@ -25,7 +25,8 @@ services:
       - shared
     environment:
       NODE_ENV: production
-      PORT: 80
+      # Must match nginx's proxy_pass (api:8080) and the healthcheck below.
+      PORT: 8080
       # Supabase Postgres connection. These are FIXED for this deployment and
       # set here as literals — NOT via Coolify env vars — on purpose: Coolify
       # kept re-injecting stale values (e.g. DB_HOST=db) from its own store and
@@ -73,12 +74,6 @@ services:
     # For local development, docker-compose.override.yml re-adds a build context
     # so `docker compose up --build` still builds web from ./app source.
     image: ${WEB_IMAGE:-ghcr.io/laurencepeter/printerupkeep-web:main}
-    # Publish the UI on a host port. Overridable via WEB_PORT so you can move it
-    # off a port that's already taken on the host without editing this file.
-    # (On Coolify you can instead attach a domain and drop this mapping — the
-    # platform proxy routes to the container's exposed port 80.)
-    ports:
-      - "${WEB_PORT:-80}:80"
     restart: unless-stopped
     depends_on:
       api:
