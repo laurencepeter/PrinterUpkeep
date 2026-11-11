@@ -18,5 +18,5 @@ COPY migrations ./migrations
 COPY assets ./assets
 RUN mkdir -p /app/uploads && chown -R node:node /app
 USER node
-EXPOSE 8080
+EXPOSE 80
 CMD ["node", "dist/index.js"]

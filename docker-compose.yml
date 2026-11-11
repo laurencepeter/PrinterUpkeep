@@ -25,8 +25,9 @@ services:
       - shared
     environment:
       NODE_ENV: production
-      # Must match nginx's proxy_pass (api:8080) and the healthcheck below.
-      PORT: 8080
+      # Must match nginx's proxy_pass (api:80, app/nginx.conf) and the
+      # healthcheck below.
+      PORT: 80
       # Supabase Postgres connection. These are FIXED for this deployment and
       # set here as literals — NOT via Coolify env vars — on purpose: Coolify
       # kept re-injecting stale values (e.g. DB_HOST=db) from its own store and
@@ -56,10 +57,14 @@ services:
       # First-boot admin password — set in Coolify (falls back to ChangeMe123!).
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
       ADMIN_FULL_NAME: System Administrator
+    # The api runs as the non-root `node` user; allow it to bind port 80
+    # inside its own network namespace (Docker's default, made explicit).
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
     volumes:
       - uploads:/app/uploads
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/api/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
