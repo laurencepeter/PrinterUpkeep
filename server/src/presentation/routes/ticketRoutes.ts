@@ -7,6 +7,7 @@ import { ticketService } from '../../application/ticketService';
 import { ticketRepo, TicketFilters } from '../../infrastructure/repositories/ticketRepo';
 import { procurementRepo } from '../../infrastructure/repositories/procurementRepo';
 import { auditRepo } from '../../infrastructure/repositories/auditRepo';
+import { NotFoundError } from '../../domain/errors';
 import { renderRequisitionForm } from '../../application/requisitionForm';
 
 export const ticketRoutes = Router();
@@ -111,13 +112,38 @@ ticketRoutes.post(
 
 // --- Procurement sub-resources -------------------------------------------
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
+  .refine((v) => !Number.isNaN(Date.parse(v)), 'invalid date');
+
+const quotationSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    vendorId: z.string().uuid().nullish(),
+    vendorContactDate: isoDate.optional(),
+    requestedDate: isoDate.optional(),
+    receivedDate: isoDate.optional(),
+    quoteDate: isoDate.optional(),
+    expiryDate: isoDate.optional(),
+    quotationNumber: z.string().trim().max(100).optional(),
+    amount: z.number().nonnegative().max(1e12).nullish(),
+    currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+    fileId: z.string().uuid().optional(),
+    notes: z.string().max(5000).optional(),
+  })
+  .refine((q) => !q.quoteDate || !q.expiryDate || q.expiryDate >= q.quoteDate, {
+    message: 'expiry date must be on or after the quote date',
+    path: ['expiryDate'],
+  });
+
 ticketRoutes.post(
   '/:id/quotations',
   writeAccess,
   asyncHandler(async (req, res) => {
-    const result = await procurementRepo.upsertQuotation(req.params.id, req.body ?? {});
+    const body = quotationSchema.parse(req.body ?? {});
+    const result = await procurementRepo.upsertQuotation(req.params.id, body);
+    if (!result) throw new NotFoundError('Quotation');
     await auditRepo.log({
-      entityType: 'quotation', entityId: String(result!.id), action: req.body?.id ? 'update' : 'create',
+      entityType: 'quotation', entityId: String(result.id), action: body.id ? 'update' : 'create',
       userId: req.user!.id,
     });
     res.status(201).json(result);

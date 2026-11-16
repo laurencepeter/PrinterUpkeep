@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../core/theme.dart';
 import '../providers/providers.dart';
 import '../widgets/charts.dart';
+import '../widgets/quote_expiry.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -25,6 +26,7 @@ class DashboardScreen extends ConsumerWidget {
             children: [
               Text('Dashboard', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 12),
+              if (data.expiringQuotes.isNotEmpty) _expiringQuotes(context, data.expiringQuotes),
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -148,6 +150,55 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
       );
+
+  /// Quotation expiry reminders: yellow inside the warning window, red inside
+  /// the critical window or once expired. Tap through to act on the ticket.
+  Widget _expiringQuotes(BuildContext context, List<Map<String, dynamic>> items) {
+    final worst = items.any((q) => q['expiry_level'] == 'critical' || q['expiry_level'] == 'expired')
+        ? 'critical'
+        : 'warning';
+    final accent = QuoteExpiry.colorFor(worst)!;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: accent, width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.request_quote, color: accent),
+              const SizedBox(width: 8),
+              Text('Quotations Expiring (${items.length})', style: Theme.of(context).textTheme.titleMedium),
+            ]),
+            const SizedBox(height: 8),
+            for (final q in items)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(QuoteExpiry.iconFor(q['expiry_level'] as String?),
+                    color: QuoteExpiry.colorFor(q['expiry_level'] as String?)),
+                title: Text('${q['ticket_number']} · ${q['vendor_name'] ?? 'Vendor'}'
+                    '${q['quotation_number'] != null ? ' · #${q['quotation_number']}' : ''}'),
+                subtitle: Text([
+                  '${q['stage_name']} · expires ${q['expiry_date']}',
+                  if ((q['expiry_next_steps'] as List?)?.isNotEmpty == true)
+                    'Next: ${(q['expiry_next_steps'] as List).first}',
+                ].join('\n')),
+                trailing: QuoteExpiryChip(
+                  level: q['expiry_level'] as String?,
+                  daysLeft: QuoteExpiry.daysLeft(q),
+                ),
+                onTap: () => GoRouter.of(context).go('/tickets/${q['ticket_id']}'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _recentActivity(BuildContext context, List<Map<String, dynamic>> items) => Card(
         margin: const EdgeInsets.only(bottom: 12),

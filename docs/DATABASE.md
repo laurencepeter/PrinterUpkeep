@@ -59,7 +59,10 @@ deleted. Powers the per-ticket timeline (“Received 8:45 AM → Vendor Contacte
 
 ### Procurement chain
 - `quotations` — vendor contact date, requested/received dates, number,
-  amount, currency, uploaded file.
+  amount, currency, uploaded file, `quote_date` and `expiry_date`
+  (CHECK: expiry ≥ quote date). Expiry reminders are raised for tickets
+  still before `po_issued`: yellow inside `quote_expiry_warn_days` (15),
+  red inside `quote_expiry_critical_days` (10) and once expired.
 - `requisitions` — auto-numbered `REQ-YYYY-NNNN`, prepared date, signed-copy
   file.
 - `approvals` — one structure for both checkpoints, discriminated by

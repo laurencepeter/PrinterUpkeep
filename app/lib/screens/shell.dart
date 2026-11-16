@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/providers.dart';
+import '../widgets/quote_expiry.dart';
 
 /// Desktop-first app shell: persistent left navigation rail, top bar with
 /// notification bell and dark-mode toggle. Collapses to a drawer on narrow
@@ -161,11 +162,23 @@ class AppShell extends ConsumerWidget {
                         children: [
                           for (final n in items)
                             ListTile(
-                              leading: Icon(switch (n.type) {
-                                'overdue' => Icons.warning_amber,
-                                'vendor_delay' => Icons.local_shipping_outlined,
-                                _ => Icons.pending_actions,
-                              }),
+                              leading: Icon(
+                                switch (n.type) {
+                                  'overdue' => Icons.warning_amber,
+                                  'vendor_delay' => Icons.local_shipping_outlined,
+                                  'quote_warning' => Icons.schedule,
+                                  'quote_critical' => Icons.error_outline,
+                                  'quote_expired' => Icons.event_busy,
+                                  _ => Icons.pending_actions,
+                                },
+                                // Quote reminders: yellow (warning) / red (critical, expired).
+                                color: QuoteExpiry.colorFor(switch (n.type) {
+                                  'quote_warning' => 'warning',
+                                  'quote_critical' => 'critical',
+                                  'quote_expired' => 'expired',
+                                  _ => null,
+                                }),
+                              ),
                               title: Text(n.title),
                               subtitle: Text(n.message),
                               onTap: n.ticketId == null

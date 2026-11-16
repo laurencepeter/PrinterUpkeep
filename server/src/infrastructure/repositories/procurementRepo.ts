@@ -32,23 +32,28 @@ export const procurementRepo = {
            currency            = COALESCE($8, currency),
            file_id             = COALESCE($9, file_id),
            notes               = COALESCE($10, notes),
+           quote_date          = COALESCE($12, quote_date),
+           expiry_date         = COALESCE($13, expiry_date),
            updated_at          = now()
          WHERE id = $1 AND ticket_id = $11 RETURNING *`,
         [
           data.id, data.vendorId ?? null, data.vendorContactDate ?? null, data.requestedDate ?? null,
           data.receivedDate ?? null, data.quotationNumber ?? null, data.amount ?? null,
           data.currency ?? null, data.fileId ?? null, data.notes ?? null, ticketId,
+          data.quoteDate ?? null, data.expiryDate ?? null,
         ],
       );
     }
     return queryOne(
       `INSERT INTO quotations (ticket_id, vendor_id, vendor_contact_date, requested_date,
-                               received_date, quotation_number, amount, currency, file_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+                               received_date, quotation_number, amount, currency, file_id, notes,
+                               quote_date, expiry_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [
         ticketId, data.vendorId ?? null, data.vendorContactDate ?? null, data.requestedDate ?? null,
         data.receivedDate ?? null, data.quotationNumber ?? null, data.amount ?? null,
         currency, data.fileId ?? null, data.notes ?? null,
+        data.quoteDate ?? null, data.expiryDate ?? null,
       ],
     );
   },
