@@ -66,6 +66,11 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     res.status(409).json({ error: { code: 'conflict', message: 'A record with that value already exists' } });
     return;
   }
+  // CHECK-constraint violations (e.g. quote expiry before quote date).
+  if (pgErr.code === '23514') {
+    res.status(400).json({ error: { code: 'validation_error', message: 'One or more values are invalid' } });
+    return;
+  }
   console.error('[error]', err);
   res.status(500).json({ error: { code: 'internal', message: 'Internal server error' } });
 }

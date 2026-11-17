@@ -4,6 +4,8 @@ import { ticketRepo, TicketFilters } from '../infrastructure/repositories/ticket
 import { lookupRepo } from '../infrastructure/repositories/lookupRepo';
 import { auditRepo } from '../infrastructure/repositories/auditRepo';
 import { notificationRepo } from '../infrastructure/repositories/notificationRepo';
+import { settingsRepo } from '../infrastructure/repositories/lookupRepo';
+import { classifyQuoteExpiry, QUOTE_EXPIRY_DEFAULTS, quoteExpiryNextSteps } from '../domain/quoteExpiry';
 
 export const ticketService = {
   async list(filters: TicketFilters) {
@@ -15,7 +17,7 @@ export const ticketService = {
     const ticket = await ticketRepo.byId(id);
     if (!ticket) throw new NotFoundError('Ticket');
 
-    const [history, notes, files, quotations, requisitions, approvals, purchaseOrders, deliveryNotes, consumables, stages] =
+    const [history, notes, files, rawQuotations, requisitions, approvals, purchaseOrders, deliveryNotes, consumables, stages] =
       await Promise.all([
         ticketRepo.stageHistory(id),
         ticketRepo.notes(id),
@@ -28,6 +30,21 @@ export const ticketService = {
         ticketRepo.ticketConsumables(id),
         lookupRepo.workflowStages(ticket.asset_type as string),
       ]);
+    const [warnDays, criticalDays] = await Promise.all([
+      settingsRepo.getInt('quote_expiry_warn_days', QUOTE_EXPIRY_DEFAULTS.warnDays),
+      settingsRepo.getInt('quote_expiry_critical_days', QUOTE_EXPIRY_DEFAULTS.criticalDays),
+    ]);
+
+    // Expiry level (ok/warning/critical/expired) + next steps for each quote.
+    const quotations = rawQuotations.map((q) => {
+      const daysLeft = q.days_to_expiry === null || q.days_to_expiry === undefined ? null : Number(q.days_to_expiry);
+      const level = classifyQuoteExpiry(daysLeft, warnDays, criticalDays);
+      return {
+        ...q,
+        expiry_level: level,
+        expiry_next_steps: level ? quoteExpiryNextSteps(ticket.stage_code as string, level) : [],
+      };
+    });
 
     const currentStage = stages.find((s) => s.id === ticket.stage_id)!;
     const reachedStageIds = new Set(history.map((h) => h.stage_code));

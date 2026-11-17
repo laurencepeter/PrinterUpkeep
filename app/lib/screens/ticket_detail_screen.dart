@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../core/api_client.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../widgets/quote_expiry.dart';
 import '../widgets/workflow_tracker.dart';
 
 class TicketDetailScreen extends ConsumerWidget {
@@ -253,6 +254,20 @@ class _TicketDetailView extends ConsumerWidget {
                     ' · received ${_dateOnly(quotation['received_date']?.toString())}',
             onEdit: () => _quotationDialog(context, ref, quotation),
           ),
+          if (quotation != null)
+            row(
+              'Validity',
+              'Quoted ${_dateOnly(quotation['quote_date']?.toString())}'
+                  ' · expires ${_dateOnly(quotation['expiry_date']?.toString())}',
+              extra: [
+                if (quotation['expiry_date'] != null)
+                  QuoteExpiryChip(
+                    level: quotation['expiry_level'] as String?,
+                    daysLeft: QuoteExpiry.daysLeft(quotation),
+                  ),
+              ],
+            ),
+          if (quotation != null) QuoteExpiryBanner(quotation: quotation),
           if (canWrite && quotation == null)
             TextButton.icon(
               icon: const Icon(Icons.add, size: 16),
@@ -485,6 +500,9 @@ class _TicketDetailView extends ConsumerWidget {
     final number = TextEditingController(text: existing?['quotation_number']?.toString() ?? '');
     final amount = TextEditingController(text: existing?['amount']?.toString() ?? '');
     DateTime? received = DateTime.tryParse(existing?['received_date']?.toString() ?? '');
+    DateTime? quoteDate = DateTime.tryParse(existing?['quote_date']?.toString() ?? '');
+    DateTime? expiry = DateTime.tryParse(existing?['expiry_date']?.toString() ?? '');
+    final fmt = DateFormat('y-MM-dd');
 
     final ok = await showDialog<bool>(
       context: context,
@@ -518,6 +536,69 @@ class _TicketDetailView extends ConsumerWidget {
                     if (d != null) setState(() => received = d);
                   },
                 ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.event_note),
+                        label: Text(quoteDate == null ? 'Quote date' : 'Quoted ${fmt.format(quoteDate!)}'),
+                        onPressed: () async {
+                          final d = await showDatePicker(
+                            context: context,
+                            initialDate: quoteDate ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (d != null) {
+                            setState(() {
+                              quoteDate = d;
+                              // Keep the pair consistent.
+                              if (expiry != null && expiry!.isBefore(d)) expiry = null;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.event_busy),
+                        label: Text(expiry == null ? 'Expiry date' : 'Expires ${fmt.format(expiry!)}'),
+                        onPressed: () async {
+                          final first = quoteDate ?? DateTime(2020);
+                          final d = await showDatePicker(
+                            context: context,
+                            initialDate: expiry ??
+                                (quoteDate ?? DateTime.now()).add(const Duration(days: 30)),
+                            firstDate: first,
+                            lastDate: first.add(const Duration(days: 730)),
+                          );
+                          if (d != null) setState(() => expiry = d);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    for (final days in const [30, 60, 90])
+                      ActionChip(
+                        label: Text('Valid $days days'),
+                        onPressed: () => setState(() {
+                          quoteDate ??= DateTime.now();
+                          expiry = quoteDate!.add(Duration(days: days));
+                        }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Reminders turn yellow 15 days and red 10 days before expiry (adjustable in Settings).',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
@@ -536,6 +617,8 @@ class _TicketDetailView extends ConsumerWidget {
           if (number.text.isNotEmpty) 'quotationNumber': number.text,
           if (amount.text.isNotEmpty) 'amount': double.tryParse(amount.text),
           if (received != null) 'receivedDate': DateFormat('y-MM-dd').format(received!),
+          if (quoteDate != null) 'quoteDate': fmt.format(quoteDate!),
+          if (expiry != null) 'expiryDate': fmt.format(expiry!),
         });
       });
     }

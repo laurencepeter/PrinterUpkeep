@@ -401,6 +401,7 @@ class DashboardData {
   DashboardData.fromJson(Map<String, dynamic> json)
       : stats = json['stats'] as Map<String, dynamic>,
         recentActivity = (json['recent_activity'] as List).cast<Map<String, dynamic>>(),
+        expiringQuotes = ((json['expiring_quotes'] as List?) ?? const []).cast<Map<String, dynamic>>(),
         monthlyRequests =
             ((json['charts']['monthly_requests']) as List).map((e) => ChartPoint.fromJson(e)).toList(),
         byDepartment = ((json['charts']['by_department']) as List).map((e) => ChartPoint.fromJson(e)).toList(),
@@ -412,6 +413,7 @@ class DashboardData {
 
   final Map<String, dynamic> stats;
   final List<Map<String, dynamic>> recentActivity;
+  final List<Map<String, dynamic>> expiringQuotes;
   final List<ChartPoint> monthlyRequests;
   final List<ChartPoint> byDepartment;
   final List<ChartPoint> byVendor;

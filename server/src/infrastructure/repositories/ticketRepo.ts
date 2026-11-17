@@ -189,7 +189,9 @@ export const ticketRepo = {
 
   async quotations(ticketId: string) {
     return query(
-      `SELECT q.*, v.company_name AS vendor_name FROM quotations q
+      `SELECT q.*, v.company_name AS vendor_name,
+              (q.expiry_date - CURRENT_DATE)::int AS days_to_expiry
+       FROM quotations q
        LEFT JOIN vendors v ON v.id = q.vendor_id
        WHERE q.ticket_id = $1 ORDER BY q.created_at`,
       [ticketId],

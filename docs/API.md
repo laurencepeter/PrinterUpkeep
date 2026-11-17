@@ -47,7 +47,7 @@ an appropriate HTTP status (400 validation, 401 auth, 403 permission,
 | POST | `/tickets/:id/stage` | officer | `{stage: <code>, notes?}` — inserts stage history (timestamp + user + notes), never overwrites |
 | GET | `/tickets/:id/history` | any | Full stage history |
 | POST | `/tickets/:id/notes` | officer | `{note}` |
-| POST | `/tickets/:id/quotations` | officer | Create/update (`id` present = update) quotation |
+| POST | `/tickets/:id/quotations` | officer | Create/update (`id` present = update) quotation. Validated body; dates `YYYY-MM-DD`; `quoteDate`/`expiryDate` set validity (expiry must be ≥ quote date). Detail responses add `days_to_expiry`, `expiry_level` (`ok`/`warning`/`critical`/`expired`) and `expiry_next_steps` |
 | POST | `/tickets/:id/requisitions` | officer | Create (number auto-generated `REQ-YYYY-NNNN`) or update |
 | GET | `/tickets/:id/requisitions/:reqId/pdf` | any | Printable requisition PDF for signing |
 | POST | `/tickets/:id/approvals/accounts` | officer | `{sentDate?, decision?, decisionDate?, approvedBy?, notes?}` — decisions: pending / funds_available / funds_unavailable |
@@ -82,7 +82,7 @@ moves are allowed (real processes loop); terminal stages accept no moves.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/dashboard` | Stats (open, completed today, awaiting vendor/quote/accounts/GA, WIP, completed, closed, owned/leased printers, avg completion days), recent activity, and chart datasets |
+| GET | `/dashboard` | Stats (open, completed today, awaiting vendor/quote/accounts/GA, WIP, completed, closed, owned/leased printers, avg completion days), recent activity, `expiring_quotes` (pre-PO tickets whose latest quote is in the warning window or expired, with level + next steps), and chart datasets |
 | GET | `/reports` | List of report keys |
 | GET | `/reports/:key?format=json\|csv\|xlsx\|pdf` | Reports: `monthly-repairs`, `vendor-performance`, `department-usage`, `average-repair-time`, `consumables-cost`, `common-issues`, `most-repaired-printers`, `tickets-by-officer`, `user-completion` (completion score of cases logged per user), `approvals-by-department` (IT approvals sheet: department, ticket, decision, date, who approved — print to PDF), `owned-vs-leased` |
 | GET | `/export/:entity?format=csv\|xlsx\|pdf\|json` | Entities: `tickets` (accepts ticket filters), `vendors`, `printers`, `departments` |

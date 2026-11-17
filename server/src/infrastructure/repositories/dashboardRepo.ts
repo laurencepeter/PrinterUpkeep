@@ -1,6 +1,29 @@
 import { query, queryOne } from '../../db/pool';
 
 export const dashboardRepo = {
+  /** Latest quote per pre-PO ticket expiring within `withinDays` (or expired). */
+  async expiringQuotes(stageCodes: readonly string[], withinDays: number) {
+    return query(
+      `SELECT t.id AS ticket_id, t.ticket_number, ws.code AS stage_code, ws.name AS stage_name,
+              q.quotation_number, v.company_name AS vendor_name,
+              to_char(q.quote_date, 'YYYY-MM-DD')  AS quote_date,
+              to_char(q.expiry_date, 'YYYY-MM-DD') AS expiry_date,
+              (q.expiry_date - CURRENT_DATE)::int  AS days_to_expiry
+       FROM tickets t
+       JOIN workflow_stages ws ON ws.id = t.current_stage_id
+       JOIN LATERAL (
+         SELECT * FROM quotations WHERE ticket_id = t.id ORDER BY created_at DESC LIMIT 1
+       ) q ON TRUE
+       LEFT JOIN vendors v ON v.id = q.vendor_id
+       WHERE ws.code = ANY($1::text[])
+         AND q.expiry_date IS NOT NULL
+         AND q.expiry_date <= CURRENT_DATE + $2::int
+       ORDER BY q.expiry_date
+       LIMIT 50`,
+      [[...stageCodes], withinDays],
+    );
+  },
+
   async stats() {
     const row = await queryOne(`
       SELECT
